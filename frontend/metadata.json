@@ -1,0 +1,6 @@
+{
+  "name": "GP — Global Price",
+  "description": "A scientific universal product valuation calculator that converts local prices to a universal GP unit and predicts values across 195 countries using real-time economic indicators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

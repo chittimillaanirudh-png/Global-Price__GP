@@ -1,0 +1,114 @@
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&f[]=satoshi@300,400,500,600,700,900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-bebas: "Clash Display", sans-serif;
+  --font-geist: "Satoshi", sans-serif;
+  --font-serif: "Clash Display", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Satoshi", sans-serif;
+}
+
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rotateBorder {
+  0% {
+    --angle: 0deg;
+  }
+  100% {
+    --angle: 360deg;
+  }
+}
+
+/* Glass Morphism Classes */
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.09); /* decreased transparency / more solid background */
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.liquid-glass {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Conic Angle Result Card static premium card */
+.gp-result-card {
+  background: linear-gradient(135deg, rgba(20, 15, 5, 0.9) 0%, rgba(5, 5, 5, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 24px;
+  position: relative;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 50px rgba(245, 158, 11, 0.05);
+}
+
+/* Custom Slim Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(1, 1, 1, 0.95);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.4);
+}
+
+/* Soft ambient animation keys */
+@keyframes fluidMove {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-fluid-1 {
+  animation: fluidMove 15s ease-in-out infinite;
+}
+
+.animate-fluid-2 {
+  animation: fluidMove 20s ease-in-out infinite reverse;
+}
+
+@keyframes rotateGlobe {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: -200% 50%;
+  }
+}
+
+.animate-globe-rotate {
+  animation: rotateGlobe 50s linear infinite;
+}
