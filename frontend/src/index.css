@@ -112,3 +112,9 @@
 .animate-globe-rotate {
   animation: rotateGlobe 50s linear infinite;
 }
+
+@media (min-width: 768px) {
+  html, body, button, a, [role="button"], input, select, textarea, .clickable, .cursor-pointer {
+    cursor: none !important;
+  }
+}

@@ -139,11 +139,15 @@ export const GlobeBackground: React.FC = () => {
     const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
     globeGroup.add(clouds);
 
-    // Lighting: white directional "sun" shining from the left
+    // Lighting: white directional "sun" shining from the left, plus a gorgeous blue atmospheric rim glow,
     // and an extremely low ambient level so the shadow side remains in complete shade.
     const sun = new THREE.DirectionalLight(0xffffff, 2.5);
     sun.position.set(-2.8, 0.4, 1.8);
     scene.add(sun);
+
+    const blueRimLight = new THREE.DirectionalLight(0x0099ff, 4.2);
+    blueRimLight.position.set(-3.5, 0.1, 0.3);
+    scene.add(blueRimLight);
 
     const ambient = new THREE.AmbientLight(0x02050a, 0.04);
     scene.add(ambient);
@@ -295,7 +299,7 @@ export const GlobeBackground: React.FC = () => {
       </div>
 
       {/* Globe container — Optimized hardware layers & Interactive controls */}
-      <div className="absolute top-[55%] -translate-y-1/2 right-[-75vw] w-[150vw] h-[150vw] sm:right-[-12vw] sm:w-[85vw] sm:h-[85vw] md:right-[-15vw] md:w-[75vw] md:h-[75vw] lg:right-[-10vw] lg:w-[65vw] lg:h-[65vw] xl:right-[-5vw] xl:w-[58vw] xl:h-[58vw] max-w-[950px] max-h-[950px] aspect-square pointer-events-auto cursor-pointer group [transform:translateZ(0)]">
+      <div className="absolute top-1/2 -translate-y-1/2 right-[-65vw] w-[130vw] h-[130vw] sm:right-[-12vw] sm:w-[85vw] sm:h-[85vw] md:right-[-15vw] md:w-[75vw] md:h-[75vw] lg:right-[-10vw] lg:w-[65vw] lg:h-[65vw] xl:right-[-5vw] xl:w-[58vw] xl:h-[58vw] max-w-[950px] max-h-[950px] aspect-square pointer-events-auto cursor-pointer group [transform:translateZ(0)]">
         {/* Soft ambient bloom behind the sphere */}
         <div className="absolute inset-0 rounded-full bg-radial from-amber-500/10 via-amber-950/5 to-transparent blur-3xl scale-125 pointer-events-none" />
         <div ref={mountRef} className="absolute inset-0" />
