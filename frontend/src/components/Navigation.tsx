@@ -96,49 +96,54 @@ export const Navigation: React.FC<NavigationProps> = ({
               className="fixed inset-0 z-50 bg-[#040404] flex flex-col p-6 sm:p-10 md:hidden overflow-y-auto"
             >
               {/* Header inside menu */}
-              <div className="flex items-center justify-between w-full pb-4">
-                {/* Brand / Logo pill */}
+              <div className="flex items-center justify-between w-full pb-8">
+                {/* Brand / Logo */}
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white shadow-lg">
-                    <span className="font-bebas text-sm tracking-widest text-amber-400 font-bold">GP</span>
+                  <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white">
+                    <span className="font-bebas text-xs tracking-widest text-white">GP</span>
                   </div>
-                  <span className="font-bebas text-lg tracking-[0.2em] text-white uppercase font-bold">GP SYSTEM</span>
+                  <span className="font-geist text-xs tracking-[0.2em] text-white uppercase font-semibold">GP SYSTEM</span>
                 </div>
 
-                {/* Circular elegant close button matching design */}
+                {/* Circular elegant close button */}
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-10 h-10 rounded-full border border-white/10 hover:border-white/25 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none bg-white/3"
+                  className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none bg-transparent"
                   aria-label="Close menu"
                 >
                   <X className="w-4 h-4 stroke-[1.5]" />
                 </button>
               </div>
 
-              {/* Thin subtle divider line */}
-              <div className="w-full h-px bg-white/10 mb-8" />
-
               {/* Spacious Navigation links matching visual hierarchy */}
-              <div className="flex flex-col gap-4 mb-8">
+              <div className="flex flex-col gap-2 mb-8">
                 {NAV_LINKS.map((link, i) => {
                   const isActive = currentPage === link.id;
                   const LinkIcon = link.icon;
                   return (
                     <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
                       transition={{ delay: i * 0.05, duration: 0.3 }}
                       key={link.id}
                       onClick={() => handleLinkClick(link.id)}
-                      className={`group w-full flex items-center gap-4 px-5 py-4 rounded-xl border transition-all text-left cursor-pointer focus:outline-none ${
+                      className={`group w-full flex items-center gap-4 px-5 py-4 rounded-r-3xl transition-all text-left cursor-pointer focus:outline-none relative overflow-hidden ${
                         isActive 
-                          ? "bg-white/10 border-white/15 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] font-medium" 
-                          : "bg-transparent border-transparent text-white/55 hover:text-white hover:bg-white/3"
+                          ? "bg-gradient-to-r from-white/10 to-transparent text-white" 
+                          : "bg-transparent text-white/50 hover:text-white"
                       }`}
                     >
-                      <LinkIcon className={`w-4 h-4 shrink-0 transition-transform duration-300 ${isActive ? "text-amber-400 scale-110" : "text-white/40 group-hover:text-white/70"}`} />
-                      <span className="font-bebas text-sm tracking-[0.2em] uppercase">
+                      {/* Active indicator bar on the left */}
+                      {isActive && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] rounded-r-full" />
+                      )}
+                      
+                      {/* Active curved left border on the item wrapper itself if we want to follow the image exactly. 
+                          The image has a white glowing left border, and a slight rounded box look. */}
+                      
+                      <LinkIcon className={`w-4 h-4 shrink-0 transition-transform duration-300 ${isActive ? "text-white scale-110" : "text-white/40 group-hover:text-white/70"}`} />
+                      <span className="font-geist text-xs tracking-[0.2em] uppercase font-medium">
                         {link.label}
                       </span>
                     </motion.button>

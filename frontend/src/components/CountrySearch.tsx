@@ -118,7 +118,7 @@ export const CountrySearch: React.FC<CountrySearchProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-[82px] inset-x-0 z-50 glass-card rounded-xl p-2 max-h-72 overflow-hidden flex flex-col bg-black/90 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+        <div className="absolute top-[82px] inset-x-0 z-50 rounded-xl p-2 max-h-72 overflow-hidden flex flex-col bg-[#0a0805] border border-amber-500/20 shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
           {/* Search Input */}
           <div className="relative flex items-center mb-2 shrink-0">
             <Search className="absolute left-3 w-4 h-4 text-white/30" />

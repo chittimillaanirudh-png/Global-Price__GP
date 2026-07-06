@@ -8,14 +8,14 @@ import {
   Check, Search, HelpCircle, AlertTriangle, ListFilter, ArrowUpDown, RefreshCw 
 } from "lucide-react";
 
-import { CountryData, ProductCategory, ExchangeRates, GPResult, CountryPrediction, ToastMessage } from "../types";
+import { CountryData, ProductCategory, ExchangeRates, GPResult, CountryPrediction, ToastMessage, ParsedData } from "../types";
 import { CATEGORIES } from "../data/categories";
 import { COUNTRIES } from "../data/countries";
 import { CountrySearch } from "../components/CountrySearch";
 import { ProcessingAnimation } from "../components/ProcessingAnimation";
 import { AnimatedCounter } from "../components/AnimatedCounter";
-import { calculateGP } from "../engine/calculateGP";
-import { predictPrice } from "../engine/predictPrice";
+import { CustomSelect } from "../components/CustomSelect";
+import { calculateGPFromParsedData, parseChatGPTResponse, validateParsedData, predictCountryPriceRange } from "../engine/calculateGP";
 import { fetchExchangeRates } from "../engine/fetchRates";
 import { fetchWorldBankPPP, fetchWorldBankCPI, fetchWorldBankGDP, fetchCommodityPrices, CommodityPrices } from "../engine/fetchWorldBank";
 import { GPCharts } from "../components/GPCharts";
@@ -30,6 +30,7 @@ type SortOption = "price-low-high" | "price-high-low" | "alphabetical";
 export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffline }) => {
   // --- Form Input States ---
   const [productName, setProductName] = useState("");
+  const [variant, setVariant] = useState("");
   const [category, setCategory] = useState<ProductCategory>(CATEGORIES[0]);
   const [homeCountry, setHomeCountry] = useState<CountryData>();
   const [localPrice, setLocalPrice] = useState("");
@@ -43,6 +44,12 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
   const [commodityPrices, setCommodityPrices] = useState<CommodityPrices>();
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // --- GPT Flow States ---
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [chatGptResponse, setChatGptResponse] = useState("");
+  const [gptError, setGptError] = useState("");
+  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
 
   // --- UI Lifecycle States ---
   const [isCalculating, setIsCalculating] = useState(false);
@@ -116,11 +123,11 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
     loadEconomicMetrics();
   }, [addToast, setApiOffline]);
 
-  // Handle calculation action
-  const handleCalculate = (e: React.FormEvent) => {
+  // Handle Step 1
+  const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productName || !homeCountry || !localPrice) {
-      addToast("error", "Input Error", "Please provide all required fields (Product, Country, Price).");
+    if (!productName || !variant || !homeCountry || !localPrice) {
+      addToast("error", "Input Error", "Please provide all required fields (Product, Variant, Country, Price).");
       return;
     }
 
@@ -129,76 +136,107 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
       addToast("error", "Invalid Price", "Please enter a valid numeric local price.");
       return;
     }
+    setStep(2);
+  };
 
-    // Begin cinematic solver sequence
+  // Generate ChatGPT prompt
+  const generatePrompt = () => {
+    return `Please act as a global trade economist. I am analyzing the product "${productName} ${variant}" in ${homeCountry?.name} (Category: ${category.name}). The local retail price is ${localPrice} ${homeCountry?.currency}.
+Please provide the following data for ${homeCountry?.name} AND for as many target countries as you have reliable data for, in a strict JSON format EXACTLY like this (do not include markdown formatting or extra text, just the raw JSON):
+{
+  "BaseRetailCost": <the base retail cost in ${homeCountry?.currency} before any taxes or duties in ${homeCountry?.name}>,
+  "CountryTaxRate": <average sales tax/VAT in decimal for ${homeCountry?.name}>,
+  "CountryDutyRate": <average import duty for this category in decimal for ${homeCountry?.name}>,
+  "LogisticsPremium": <logistics index score modifier for ${homeCountry?.name}>,
+  "RetailMargin": <typical retail margin for this category in decimal for ${homeCountry?.name}>,
+  "GlobalPurchasingPower": <PPP conversion factor to USD for ${homeCountry?.name}>,
+  "ExchangeRate": <Current exchange rate to USD for ${homeCountry?.name}>,
+  "CPICurrent": <Current Consumer Price Index for ${homeCountry?.name}>,
+  "CPIBase": <Base Consumer Price Index (e.g. 2010=100) for ${homeCountry?.name}>,
+  "KnownMarketPrice": <Your known real market price for the product in ${homeCountry?.name}, or null if unknown>,
+  "TargetCountries": {
+    "<Country Code (e.g., US, GB, IN)>": {
+      "CountryTaxRate": <tax/VAT in decimal>,
+      "CountryDutyRate": <import duty in decimal>,
+      "LogisticsPremium": <logistics modifier>,
+      "RetailMargin": <retail margin>,
+      "ExchangeRate": <Exchange rate to USD>,
+      "CPICurrent": <Current CPI>,
+      "CPIBase": <Base CPI>,
+      "KnownMarketPrice": <Your known real market price for the product in this target country, or null if unknown>
+    }
+  }
+}`;
+  };
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(generatePrompt());
+    addToast("success", "Copied!", "Prompt copied to clipboard. Open ChatGPT to paste it.");
+  };
+
+  const handleChatGPTParse = () => {
+    if (!chatGptResponse.trim()) {
+      setGptError("Please paste the ChatGPT response.");
+      return;
+    }
+    const parsed = parseChatGPTResponse(chatGptResponse);
+    if (!parsed) {
+      setGptError("Could not find valid JSON in the response. Please ensure ChatGPT outputted the JSON block.");
+      return;
+    }
+    const { isValid, missingKeys } = validateParsedData(parsed);
+    if (!isValid) {
+      setGptError(`Missing required keys: ${missingKeys.join(", ")}`);
+      return;
+    }
+    
+    setGptError("");
+    setParsedData(parsed);
     setIsCalculating(true);
-    setShowResults(false);
+    setStep(4);
   };
 
   const handleSolverCompletion = () => {
     setIsCalculating(false);
     
     const priceNum = parseFloat(localPrice.replace(/,/g, ""));
-    if (!homeCountry) return;
+    if (!homeCountry || !parsedData) return;
 
     // Run Forward Engine
-    const gpResult = calculateGP(
-      priceNum,
-      homeCountry,
-      category,
-      rates,
-      pppData,
-      cpiData,
-      commodityPrices
-    );
-
+    const gpResult = calculateGPFromParsedData(parsedData, homeCountry, category);
     setCalculationResult(gpResult);
 
     // Run Reverse Predictions for all 195 countries
     const homeRates = rates[homeCountry.currency] ?? homeCountry.ppp_fallback;
     const userPriceUSD = priceNum / homeRates;
 
-    const list: CountryPrediction[] = COUNTRIES.map((c) => {
-      const predictedPrice = predictPrice(
-        gpResult.GP,
-        c,
-        category,
-        rates,
-        pppData,
-        cpiData,
-        gpResult.scale_factor,
-        commodityPrices
-      );
+    // Determine Top 20 countries by GDP to mark as "Verified Data" (since they have the most reliable macro data)
+    const sortedByGDP = [...COUNTRIES].sort((a, b) => b.gdp_ppp_billion - a.gdp_ppp_billion);
+    const top20Codes = new Set(sortedByGDP.slice(0, 20).map(c => c.code));
 
+    const list: CountryPrediction[] = COUNTRIES.map((c) => {
+      const pred = predictCountryPriceRange(gpResult.GP, c, category, parsedData);
       const targetRates = rates[c.currency] ?? c.ppp_fallback;
-      const predictedUSD = predictedPrice / targetRates;
+      const predictedUSD = pred.midpoint / targetRates;
       
       const vs_user_percent = userPriceUSD > 0 
         ? ((predictedUSD - userPriceUSD) / userPriceUSD) * 100 
         : 0;
 
-      // Apply regional adjustments (theta) to show on column
-      let duty = c.duty_electronics;
-      let tax = c.tax_electronics;
-      if (category.duty_bracket === "food") {
-        duty = c.duty_food;
-        tax = c.tax_food;
-      } else if (category.duty_bracket === "medicine") {
-        duty = c.duty_medicine;
-        tax = c.tax_medicine;
-      } else if (category.duty_bracket === "fuel") {
-        duty = c.duty_fuel;
-        tax = c.tax_fuel;
-      }
-      const theta = (1 + duty) * (1 + tax) * c.logistics_score * (1 + c.retail_margin);
+      // Ensure min is always lower than max
+      const min = Math.min(pred.min, pred.max);
+      const max = Math.max(pred.min, pred.max);
 
       return {
         country: c,
-        predicted_price: predictedPrice,
-        theta,
+        predicted_price: pred.midpoint,
+        predicted_price_min: min,
+        predicted_price_max: max,
+        theta: pred.theta,
         vs_user_percent,
         is_cheaper: predictedUSD < userPriceUSD,
-        is_priority: priorityCountry?.code === c.code
+        is_priority: priorityCountry?.code === c.code,
+        is_verified: top20Codes.has(c.code) || c.code === homeCountry.code
       };
     });
 
@@ -287,7 +325,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
     if (!calculationResult || !homeCountry) return;
 
     try {
-      const cardElement = document.getElementById("gp-standard-card");
+      const cardElement = document.getElementById("gp-standard-card-export") || document.getElementById("gp-standard-card");
       if (!cardElement) {
         addToast("error", "Download Failed", "Could not find the card element in the document.");
         return;
@@ -336,7 +374,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
     addToast("warning", "Preparing Export", "Rendering your report PDF with the Global Card...");
 
     try {
-      const cardElement = document.getElementById("gp-standard-card");
+      const cardElement = document.getElementById("gp-standard-card-export") || document.getElementById("gp-standard-card");
       if (!cardElement) {
         addToast("error", "Export Failed", "Could not locate the Global Card component.");
         return;
@@ -572,15 +610,15 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
           </motion.div>
         )}
 
-        {/* State 3: Normal Formulation Panel - Only show if not displaying results */}
-        {!isCalculating && !isLoadingData && dataLoaded && !showResults && (
+        {/* Step 1: Normal Formulation Panel */}
+        {step === 1 && !isCalculating && !isLoadingData && dataLoaded && !showResults && (
           <motion.div
             key="formPanel"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             className="max-w-2xl mx-auto"
           >
-            <form onSubmit={handleCalculate} className="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+            <form onSubmit={handleStep1Submit} className="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
               
               <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
                 <Calculator className="text-amber-400 w-5 h-5" />
@@ -600,23 +638,31 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                 />
               </div>
 
-              {/* Input 2: Product Category */}
+              {/* Input 2: Variant */}
               <div className="flex flex-col gap-2">
-                <label className="font-geist text-xs text-white/50 tracking-[0.2em] uppercase font-medium">PRODUCT CATEGORY</label>
-                <select
+                <label className="font-geist text-xs text-white/50 tracking-[0.2em] uppercase font-medium">VARIANT / MODEL</label>
+                <input
+                  type="text"
+                  required
+                  value={variant}
+                  onChange={(e) => setVariant(e.target.value)}
+                  placeholder="e.g. 256GB, Base model, 1L..."
+                  className="px-4 h-12 rounded-xl bg-white/3 border border-white/8 focus:border-amber-500 focus:shadow-[0_0_15px_rgba(245,158,11,0.25)] outline-none text-sm text-white/90 font-geist transition-all"
+                />
+              </div>
+
+              {/* Input 3: Product Category */}
+              <div className="flex flex-col gap-2">
+                <CustomSelect
+                  label="PRODUCT CATEGORY"
+                  options={CATEGORIES}
                   value={category.id}
-                  onChange={(e) => {
-                    const found = CATEGORIES.find(c => c.id === e.target.value);
+                  onChange={(val) => {
+                    const found = CATEGORIES.find(c => c.id === val);
                     if (found) setCategory(found);
                   }}
-                  className="px-4 h-12 rounded-xl bg-black border border-white/8 focus:border-amber-500 outline-none text-sm text-white/90 font-geist cursor-pointer"
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat.id} value={cat.id} className="bg-[#0c0c0c] text-white">
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select Category"
+                />
                 <span className="text-[10px] text-white/40 italic">
                   Defines specific tax thresholds, retail margins, and custom duties.
                 </span>
@@ -625,7 +671,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
               {/* Grid for Country + Local Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 
-                {/* Input 3: Home Country */}
+                {/* Input 4: Home Country */}
                 <CountrySearch
                   label="YOUR COUNTRY"
                   selected={homeCountry}
@@ -633,7 +679,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                   placeholder="Select home country..."
                 />
 
-                {/* Input 4: Local Price */}
+                {/* Input 5: Local Price */}
                 <div className="flex flex-col gap-2">
                   <label className="font-geist text-xs text-white/50 tracking-[0.2em] uppercase font-medium">
                     LOCAL PRICE {homeCountry && `(${homeCountry.currency})`}
@@ -657,7 +703,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
 
               </div>
 
-              {/* Input 5: Optional Priority Country */}
+              {/* Optional Priority Country */}
               <CountrySearch
                 label="SHOW THIS COUNTRY FIRST (OPTIONAL)"
                 selected={priorityCountry}
@@ -669,19 +715,141 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={!isFormValid}
+                  disabled={!productName.trim() || !variant.trim() || !homeCountry || !localPrice.trim()}
                   className={`w-full h-14 rounded-xl font-bebas text-lg tracking-[0.15em] flex items-center justify-center gap-2 transition-all ${
-                    isFormValid 
+                    (productName.trim() && variant.trim() && homeCountry && localPrice.trim()) 
                       ? "liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer"
                       : "bg-white/5 border border-white/5 text-white/20 cursor-not-allowed"
                   }`}
                 >
-                  <Calculator className="w-5 h-5 text-amber-400" />
-                  CALCULATE GLOBAL PRICE
+                  CONTINUE TO VERIFICATION
                 </button>
               </div>
 
             </form>
+          </motion.div>
+        )}
+
+        {/* Step 2: ChatGPT Prompt Generation */}
+        {step === 2 && !isCalculating && !showResults && (
+          <motion.div
+            key="promptPanel"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto"
+          >
+            <div className="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+              <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Calculator className="text-amber-400 w-5 h-5" />
+                  <h2 className="font-bebas text-lg tracking-widest text-white">STEP 2: GET VERIFIED DATA</h2>
+                </div>
+                <button 
+                  onClick={() => setStep(1)}
+                  className="text-white/40 hover:text-white text-xs font-geist transition-colors cursor-pointer"
+                >
+                  Back
+                </button>
+              </div>
+
+              <p className="text-sm font-light text-white/70 leading-relaxed">
+                To calculate a highly accurate Global Price, we need to strip away local friction factors. 
+                Please copy the prompt below, paste it into ChatGPT, and bring back the resulting JSON block.
+              </p>
+
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 to-amber-500/0 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
+                <textarea
+                  readOnly
+                  value={generatePrompt()}
+                  className="relative w-full h-48 p-4 rounded-xl bg-black border border-white/10 text-xs font-mono text-white/80 resize-none outline-none focus:border-amber-500/50"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
+                <button
+                  onClick={copyPrompt}
+                  className="w-full sm:w-1/2 h-14 rounded-xl font-bebas text-lg tracking-[0.15em] bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/10 text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Check className="w-5 h-5" /> COPY PROMPT
+                </button>
+                <a
+                  href="https://chatgpt.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-1/2 h-14 rounded-xl font-bebas text-lg tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <ArrowUpRight className="w-5 h-5 text-amber-400" /> OPEN CHATGPT
+                </a>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-white/5 text-center">
+                <button
+                  onClick={() => setStep(3)}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-geist tracking-wide uppercase cursor-pointer"
+                >
+                  I have the data, proceed to paste →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 3: Paste ChatGPT JSON Response */}
+        {step === 3 && !isCalculating && !showResults && (
+          <motion.div
+            key="pastePanel"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto"
+          >
+            <div className="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+              <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Calculator className="text-amber-400 w-5 h-5" />
+                  <h2 className="font-bebas text-lg tracking-widest text-white">STEP 3: ANALYZE DATA</h2>
+                </div>
+                <button 
+                  onClick={() => setStep(2)}
+                  className="text-white/40 hover:text-white text-xs font-geist transition-colors cursor-pointer"
+                >
+                  Back
+                </button>
+              </div>
+
+              <p className="text-sm font-light text-white/70 leading-relaxed">
+                Paste the JSON data outputted by ChatGPT into the box below.
+              </p>
+
+              {gptError && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex gap-3 items-start">
+                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-red-400 text-sm">Validation Error</h4>
+                    <p className="text-xs text-red-200/70 mt-1">{gptError}</p>
+                    <p className="text-xs text-red-200/50 mt-2 font-mono italic">
+                      If ChatGPT missed fields, tell it: "You missed some fields. Please provide the exact JSON structure requested."
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <textarea
+                value={chatGptResponse}
+                onChange={(e) => setChatGptResponse(e.target.value)}
+                placeholder="{\n  &quot;BaseRetailCost&quot;: 1000,\n  ...\n}"
+                className="w-full h-64 p-4 rounded-xl bg-black/50 border border-white/10 text-sm font-mono text-amber-500/90 focus:border-amber-500/50 outline-none resize-y transition-colors"
+              />
+
+              <div className="pt-4">
+                <button
+                  onClick={handleChatGPTParse}
+                  className="w-full h-14 rounded-xl font-bebas text-lg tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2 transition-all"
+                >
+                  <Search className="w-5 h-5 text-amber-400" /> VALIDATE & CALCULATE
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -722,6 +890,66 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
               >
                 <Download className="w-4 h-4 stroke-[2] text-amber-400" />
               </button>
+              {/* Hidden Card specifically for PDF Export to avoid responsive shifting */}
+              <div className="absolute top-[-9999px] left-[-9999px] pointer-events-none opacity-0">
+                <div 
+                  id="gp-standard-card-export" 
+                  className="gp-result-card p-6 text-left overflow-hidden relative border border-amber-500/25 shadow-[0_20px_50px_rgba(245,158,11,0.12)] rounded-3xl bg-gradient-to-br from-[#1a1308] to-[#030303] flex flex-col justify-between"
+                  style={{ width: '450px', height: '285px' }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-amber-500/5 to-transparent opacity-60 pointer-events-none" />
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="flex justify-between items-start relative z-10">
+                    <div className="flex flex-col">
+                      <span className="font-bebas text-lg tracking-[0.25em] text-white">GLOBAL PRICE CARD</span>
+                      <span className="text-[7px] text-amber-500/70 uppercase tracking-widest font-mono">Universal Standard Metric</span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 rounded text-amber-400 font-bebas text-[10px] tracking-wider shrink-0">
+                      GP STANDARD
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 mt-3 relative z-10">
+                    <div className="w-10 h-8 rounded-md bg-gradient-to-br from-amber-300 via-amber-400 to-amber-600 border border-amber-200/50 relative overflow-hidden shadow-[0_0_15px_rgba(245,158,11,0.2)] shrink-0">
+                      <div className="absolute inset-x-0 top-1/2 h-px bg-amber-900/40" />
+                      <div className="absolute inset-y-0 left-1/2 w-px bg-amber-900/40" />
+                      <div className="absolute inset-y-0 left-1/4 w-px bg-amber-900/20" />
+                      <div className="absolute inset-y-0 right-1/4 w-px bg-amber-900/20" />
+                      <div className="absolute top-1/4 inset-x-0 h-px bg-amber-900/20" />
+                      <div className="absolute bottom-1/4 inset-x-0 h-px bg-amber-900/20" />
+                      <div className="absolute top-1/2 left-1/2 w-3.5 h-2.5 bg-amber-400/80 -translate-x-1/2 -translate-y-1/2 rounded border border-amber-600/30" />
+                    </div>
+                    <svg className="w-4 h-4 text-amber-500/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h1.5a2.25 2.25 0 0 1 2.25 2.25v1.5a2.25 2.25 0 0 1-2.25 2.25h-1.5a2.25 2.25 0 0 1-2.25-2.25v-1.5a2.25 2.25 0 0 1 2.25-2.25Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75h1.5a2.25 2.25 0 0 1 2.25 2.25v1.5a2.25 2.25 0 0 1-2.25 2.25h-1.5a2.25 2.25 0 0 1-2.25-2.25v-1.5a2.25 2.25 0 0 1 2.25-2.25Z" />
+                    </svg>
+                  </div>
+
+                  <div className="my-3 relative z-10">
+                    <span className="text-white/35 font-mono text-[7px] uppercase tracking-wider block mb-0.5">SERIAL</span>
+                    <div className="font-mono text-3xl font-semibold text-white tracking-[0.18em] flex items-center gap-1 drop-shadow-[0_0_12px_rgba(245,158,11,0.55)]">
+                      <span>GP</span>
+                      <span className="text-amber-500">-</span>
+                      <span>{calculationResult.GP.toFixed(3)}</span>
+                      <span className="text-white/20 text-xs ml-1 tracking-normal font-sans">UNITS</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-end pt-2 border-t border-white/5 relative z-10 mt-0">
+                    <div className="flex flex-col max-w-full min-w-0">
+                      <span className="text-[7px] text-white/30 uppercase tracking-widest font-mono">PRODUCT</span>
+                      <span className="font-bebas text-sm text-amber-200 tracking-wider truncate uppercase mt-0.5" title={productName}>
+                        {productName || "STANDARD BASKET"}
+                      </span>
+                      <div className="flex flex-wrap gap-2 text-[7px] font-mono text-white/45 mt-1">
+                        <span>CONF: <span className="text-green-400 font-bold">{calculationResult.confidence.toUpperCase()}</span></span>
+                        <span>THETA: <span className="text-amber-400 font-bold">{calculationResult.theta.toFixed(3)}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
  
               {/* GP Display Card (Styled as a gorgeous High-End ATM / Bank Card) */}
               <div 
@@ -892,7 +1120,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                     <tr className="border-b border-white/5 bg-white/2 backdrop-blur-md sticky top-0 z-20 text-[10px] font-geist text-white/40 font-semibold tracking-wider uppercase">
                       <th className="py-4 px-6">Country</th>
                       <th className="py-4 px-4 text-center">Currency</th>
-                      <th className="py-4 px-4 text-right">Predicted Cost</th>
+                      <th className="py-4 px-4 text-right">Predicted Range</th>
                       <th className={`py-4 px-4 text-right sm:table-cell ${showDetailsMobile ? 'table-cell' : 'hidden'}`}>vs Home Country</th>
                       <th className={`py-4 px-6 text-right sm:table-cell ${showDetailsMobile ? 'table-cell' : 'hidden'}`}>Adjustment (θ)</th>
                     </tr>
@@ -904,19 +1132,35 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                       <tr className="border-b border-amber-500/20 bg-amber-950/10 shadow-[inset_0_0_20px_rgba(245,158,11,0.05)] text-sm group">
                         <td className="py-4.5 px-6 font-medium text-white flex items-center gap-3">
                           <span className="text-xl shrink-0">{priorityItem.country.flag}</span>
-                          <div className="truncate">
+                          <div className="truncate flex flex-col items-start gap-1">
                             <span className="block font-semibold">{priorityItem.country.name}</span>
-                            <span className="inline-block text-[9px] bg-amber-500/20 text-amber-300 font-bebas tracking-wider px-1.5 py-0.5 rounded uppercase mt-0.5">
-                              PRIORITY COUNTRY
-                            </span>
+                            <div className="flex gap-2 items-center">
+                              <span className="inline-block text-[9px] bg-amber-500/20 text-amber-300 font-bebas tracking-wider px-1.5 py-0.5 rounded uppercase">
+                                PRIORITY COUNTRY
+                              </span>
+                              {priorityItem.is_verified ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] bg-green-500/20 text-green-400 font-geist px-1.5 py-0.5 rounded uppercase border border-green-500/30 font-bold">
+                                  <Check className="w-2.5 h-2.5" /> Verified Data
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[9px] bg-amber-500/20 text-amber-400 font-geist px-1.5 py-0.5 rounded uppercase border border-amber-500/30 font-bold">
+                                  <AlertTriangle className="w-2.5 h-2.5" /> Estimated
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-4.5 px-4 text-center font-mono text-xs text-amber-300 font-semibold uppercase">
                           {priorityItem.country.currency}
                         </td>
                         <td className="py-4.5 px-4 text-right font-semibold text-white text-base">
-                          {priorityItem.country.symbol}
-                          {priorityItem.predicted_price.toLocaleString(undefined, {
+                          <span className="text-white/40 text-xs mr-1">{priorityItem.country.symbol}</span>
+                          {priorityItem.predicted_price_min.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                          <span className="text-white/30 mx-1">—</span>
+                          {priorityItem.predicted_price_max.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                           })}
@@ -960,10 +1204,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                         const isHome = pred.country.code === homeCountry?.code;
 
                         return (
-                          <motion.tr
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: Math.min(i * 0.01, 0.25) }}
+                          <tr
                             key={pred.country.code}
                             className={`border-b border-white/3 text-xs md:text-sm hover:bg-white/2 transition-colors ${
                               isEven ? "bg-white/0.5" : "bg-transparent"
@@ -971,11 +1212,22 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                           >
                             <td className="py-3.5 px-6 font-medium text-white flex items-center gap-3">
                               <span className="text-lg shrink-0">{pred.country.flag}</span>
-                              <div className="truncate">
-                                <span className="font-semibold text-white/90">{pred.country.name}</span>
-                                {isHome && (
-                                  <span className="inline-block text-[9px] bg-amber-500/20 text-amber-300 font-bebas tracking-wider px-1.5 py-0.5 rounded uppercase ml-2">
-                                    HOME COUNTRY
+                              <div className="truncate flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-white/90">{pred.country.name}</span>
+                                  {isHome && (
+                                    <span className="inline-block text-[9px] bg-amber-500/20 text-amber-300 font-bebas tracking-wider px-1.5 py-0.5 rounded uppercase">
+                                      HOME
+                                    </span>
+                                  )}
+                                </div>
+                                {pred.is_verified ? (
+                                  <span className="inline-flex items-center gap-1 text-[9px] bg-green-500/20 text-green-400 font-geist px-1.5 py-0.5 rounded uppercase border border-green-500/30 font-bold">
+                                    <Check className="w-2.5 h-2.5" /> Verified Data
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[9px] bg-amber-500/20 text-amber-400 font-geist px-1.5 py-0.5 rounded uppercase border border-amber-500/30 font-bold">
+                                    <AlertTriangle className="w-2.5 h-2.5" /> Estimated
                                   </span>
                                 )}
                               </div>
@@ -984,8 +1236,13 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                               {pred.country.currency}
                             </td>
                             <td className="py-3.5 px-4 text-right font-bold text-white text-sm md:text-base">
-                              {pred.country.symbol}
-                              {pred.predicted_price.toLocaleString(undefined, {
+                              <span className="text-white/30 text-xs font-normal mr-1">{pred.country.symbol}</span>
+                              {pred.predicted_price_min.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                              <span className="text-white/20 font-normal mx-1 text-xs">—</span>
+                              {pred.predicted_price_max.toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
@@ -1012,7 +1269,7 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
                                 {pred.theta.toFixed(3)}
                               </span>
                             </td>
-                          </motion.tr>
+                          </tr>
                         );
                       })
                     ) : (

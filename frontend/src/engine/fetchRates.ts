@@ -45,13 +45,13 @@ export const fetchExchangeRates = async (): Promise<{ rates: ExchangeRates; cach
   }
 
   try {
-    const res = await fetch("https://api.frankfurter.app/latest?base=USD");
-    if (!res.ok) throw new Error("Frankfurter API response not ok");
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
+    if (!res.ok) throw new Error("ExchangeRate API response not ok");
     
     const data = await res.json();
-    if (!data || !data.rates) throw new Error("Invalid Frankfurter data");
+    if (!data || !data.rates) throw new Error("Invalid ExchangeRate data");
 
-    const fullRates: ExchangeRates = { USD: 1.0, ...data.rates };
+    const fullRates: ExchangeRates = { ...data.rates, USD: 1.0 };
     
     // Fill in any country currency not present in the API using their ppp fallback or static fallback ratio
     for (const country of COUNTRIES) {

@@ -114,7 +114,7 @@
 }
 
 @media (min-width: 768px) {
-  html, body, button, a, [role="button"], input, select, textarea, .clickable, .cursor-pointer {
+  * {
     cursor: none !important;
   }
 }

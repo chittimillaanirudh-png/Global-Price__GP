@@ -1,66 +1,65 @@
 // src/engine/calculateGP.ts
-import { CountryData, ProductCategory, ExchangeRates, GPResult } from "../types";
+import { GPResult, CountryData, ProductCategory, ParsedData } from "../types";
 import { getPreviousGP, saveGP } from "./cache";
 
-export const calculateGP = (
-  localPrice: number,
-  country: CountryData,
-  category: ProductCategory,
-  rates: ExchangeRates,
-  pppData: { [code: string]: number },
-  cpiData: { [code: string]: number },
-  commodityPrices?: { energy: number; food: number; steel: number }
-): GPResult => {
-  // STEP 1 — Physical Anchor Basket (GFRB)
-  // Base commodity anchor prices:
-  const BASE_ENERGY_USD = 50.0;
-  const BASE_FOOD_USD = 0.30;
-  const BASE_STEEL_USD = 0.80;
-  const LABOR_USD = 2.00;
+export const parseChatGPTResponse = (response: string): ParsedData | null => {
+  try {
+    // Find the first { and last } to extract JSON block
+    const firstBrace = response.indexOf('{');
+    const lastBrace = response.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1) {
+      return null;
+    }
 
-  // Scale commodity prices dynamically if live World Bank indices are available
-  const energyUSD = commodityPrices ? BASE_ENERGY_USD * (commodityPrices.energy / 50.0) : BASE_ENERGY_USD;
-  // If food commodities are index-based (wheat per metric ton is ~280 USD), we can normalize it:
-  const foodUSD = commodityPrices ? BASE_FOOD_USD * (commodityPrices.food / 280.0) : BASE_FOOD_USD;
-  const steelUSD = commodityPrices ? BASE_STEEL_USD * (commodityPrices.steel / 110.0) : BASE_STEEL_USD;
-
-  const basketUSD = energyUSD + foodUSD + steelUSD + LABOR_USD;
-  const E_c = rates[country.currency] ?? country.ppp_fallback;
-  const V_c = basketUSD * E_c;
-
-  // STEP 2 — Regional Adjustment Factor θ (Theta)
-  let duty = country.duty_electronics;
-  let tax = country.tax_electronics;
-
-  if (category.duty_bracket === "food") {
-    duty = country.duty_food;
-    tax = country.tax_food;
-  } else if (category.duty_bracket === "medicine") {
-    duty = country.duty_medicine;
-    tax = country.tax_medicine;
-  } else if (category.duty_bracket === "fuel") {
-    duty = country.duty_fuel;
-    tax = country.tax_fuel;
+    const jsonStr = response.substring(firstBrace, lastBrace + 1);
+    const data = JSON.parse(jsonStr) as ParsedData;
+    return data;
+  } catch (err) {
+    console.error("Failed to parse ChatGPT response", err);
+    return null;
   }
+};
 
-  // Calculate theta: (1 + duty) * (1 + tax) * logistics_score * (1 + retail_margin)
-  const theta = (1 + duty) * (1 + tax) * country.logistics_score * (1 + country.retail_margin);
+export const validateParsedData = (data: ParsedData): { isValid: boolean, missingKeys: string[] } => {
+  const requiredKeys: (keyof ParsedData)[] = [
+    "BaseRetailCost",
+    "CountryTaxRate",
+    "CountryDutyRate",
+    "LogisticsPremium",
+    "RetailMargin",
+    "GlobalPurchasingPower"
+  ];
+  
+  const missingKeys = requiredKeys.filter(key => typeof data[key] !== 'number');
+  
+  return {
+    isValid: missingKeys.length === 0,
+    missingKeys
+  };
+};
 
-  // STEP 3 — Strip frictions
-  const P_clean = localPrice / theta;
+export const calculateGPFromParsedData = (
+  parsedData: ParsedData,
+  country: CountryData,
+  category: ProductCategory
+): GPResult => {
+  // Step 1: Base Anchor basket mapped from verified ChatGPT data
+  const V_c = parsedData.BaseRetailCost / (1 + parsedData.RetailMargin);
+  
+  // Step 2: Regional Adjustment Factor θ (Theta) calculated from verified inputs
+  const theta = (1 + parsedData.CountryDutyRate) * (1 + parsedData.CountryTaxRate) * parsedData.LogisticsPremium * (1 + parsedData.RetailMargin);
 
-  // STEP 4 — Normalize against basket cost
+  // Step 3: Strip frictions
+  const P_clean = parsedData.BaseRetailCost / theta;
+
+  // Step 4: Normalize against basket cost
   const PPNP = P_clean / V_c;
 
-  // STEP 5 — PPP and CPI corrections
-  const ppp = pppData[country.code] ?? country.ppp_fallback;
-  const cpi = cpiData[country.code] ?? 100.0;
-  const cpi_ratio = 100.0 / cpi;
+  // Step 5: Apply purchasing power adjustments
+  const PPNP_adj = PPNP * parsedData.GlobalPurchasingPower;
 
-  // PPNP_adjusted = PPNP * (PPP_c / E_c) * (CPI_0 / CPI_c)
-  const PPNP_adj = PPNP * (ppp / E_c) * cpi_ratio;
-
-  // STEP 6 — EWMA Smoothing
+  // Step 6: EWMA Smoothing
   const previousGP = getPreviousGP(category.id);
   const finalGP = previousGP !== null 
     ? (0.15 * PPNP_adj + 0.85 * previousGP) 
@@ -68,22 +67,81 @@ export const calculateGP = (
 
   saveGP(category.id, finalGP);
 
-  // Determine confidence based on data quality score
-  let confidence: 'high' | 'medium' | 'low' = 'medium';
-  if (country.data_quality > 0.85) {
-    confidence = 'high';
-  } else if (country.data_quality < 0.55) {
-    confidence = 'low';
-  }
-
+  // Verified data always gets high confidence
   return {
     GP: finalGP,
     V_c,
     theta,
     P_clean,
     PPNP_adj,
-    scale_factor: 1.0, // Base scale is normalized to 1.0 relative to US standard reference
-    confidence,
+    scale_factor: 1.0,
+    confidence: 'high',
     countries_contributing: 195
+  };
+};
+
+export const predictCountryPriceRange = (
+  GP: number,
+  targetCountry: CountryData,
+  category: ProductCategory,
+  baseData: ParsedData
+): { min: number; max: number; midpoint: number; theta: number } => {
+  // 1. Re-calculate the local friction factor (theta) for the TARGET country
+  // We use the existing logic for theta prediction based on target country's typical stats
+  let duty = targetCountry.duty_electronics;
+  let tax = targetCountry.tax_electronics;
+
+  if (category.duty_bracket === "food") {
+    duty = targetCountry.duty_food;
+    tax = targetCountry.tax_food;
+  } else if (category.duty_bracket === "medicine") {
+    duty = targetCountry.duty_medicine;
+    tax = targetCountry.tax_medicine;
+  } else if (category.duty_bracket === "fuel") {
+    duty = targetCountry.duty_fuel;
+    tax = targetCountry.tax_fuel;
+  }
+
+  const theta_reference = (1 + duty) * (1 + tax) * targetCountry.logistics_score * (1 + targetCountry.retail_margin);
+  
+  const targetData = baseData.TargetCountries?.[targetCountry.code];
+  const knownMarketPrice = targetData?.KnownMarketPrice;
+
+  let midpoint = 0;
+  let final_theta = theta_reference;
+
+  if (knownMarketPrice != null && targetData != null) {
+    const dynamic_duty = targetData.CountryDutyRate ?? duty;
+    const dynamic_tax = targetData.CountryTaxRate ?? tax;
+    const dynamic_logistics = targetData.LogisticsPremium ?? targetCountry.logistics_score;
+    const dynamic_margin = targetData.RetailMargin ?? targetCountry.retail_margin;
+    
+    const theta_dynamic = (1 + dynamic_duty) * (1 + dynamic_tax) * dynamic_logistics * (1 + dynamic_margin);
+    
+    // Self-correcting formula using known real price vs predicted friction drift
+    midpoint = knownMarketPrice * (theta_dynamic / theta_reference);
+    final_theta = theta_dynamic;
+  } else {
+    // 2. We use baseData.BaseRetailCost as a starting anchor point and scale by GP * theta
+    // Convert based on target country's PPP fallback 
+    const ppp_divisor = targetCountry.ppp_fallback > 0 ? targetCountry.ppp_fallback : 1.0;
+    
+    // P_base = (BaseRetailCost * GP / GlobalPurchasingPower) * PPP_target
+    const p_base = (baseData.BaseRetailCost * GP / baseData.GlobalPurchasingPower) * ppp_divisor;
+    
+    midpoint = p_base * theta_reference;
+  }
+  
+  // Variability range based on logistics score (higher score = wider variance)
+  const variance = 0.05 + (targetCountry.logistics_score - 1.0) * 0.1; 
+  
+  const min = midpoint * (1 - variance);
+  const max = midpoint * (1 + variance);
+
+  return {
+    min: isNaN(min) || min < 0 ? 0 : min,
+    max: isNaN(max) || max < 0 ? 0 : max,
+    midpoint: isNaN(midpoint) || midpoint < 0 ? 0 : midpoint,
+    theta: final_theta
   };
 };

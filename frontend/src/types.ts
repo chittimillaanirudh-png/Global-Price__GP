@@ -53,13 +53,41 @@ export interface GPResult {
   countries_contributing: number;
 }
 
+export interface TargetCountryData {
+  CountryTaxRate?: number;
+  CountryDutyRate?: number;
+  LogisticsPremium?: number;
+  RetailMargin?: number;
+  ExchangeRate?: number;
+  CPICurrent?: number;
+  CPIBase?: number;
+  KnownMarketPrice?: number | null;
+}
+
+export interface ParsedData {
+  BaseRetailCost: number;
+  CountryTaxRate: number;
+  CountryDutyRate: number;
+  LogisticsPremium: number;
+  RetailMargin: number;
+  GlobalPurchasingPower: number;
+  ExchangeRate?: number;
+  CPICurrent?: number;
+  CPIBase?: number;
+  KnownMarketPrice?: number | null;
+  TargetCountries?: Record<string, TargetCountryData>;
+}
+
 export interface CountryPrediction {
   country: CountryData;
-  predicted_price: number;
+  predicted_price: number; // Midpoint
+  predicted_price_min: number;
+  predicted_price_max: number;
   theta: number;
   vs_user_percent: number;
   is_cheaper: boolean;
   is_priority: boolean;
+  is_verified?: boolean;
 }
 
 export interface CalculatorInput {

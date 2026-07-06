@@ -518,10 +518,23 @@ export const HowItWorks: React.FC = () => {
       <section className="space-y-8">
         <div className="space-y-2 text-center md:text-left">
           <h2 className="font-bebas text-3xl tracking-widest text-white">6. DATABASE DIRECTORY CREDITS</h2>
-          <p className="font-geist text-xs text-amber-500 uppercase tracking-widest">LIVE FREE PUBLIC DATA FEED SOURCES</p>
+          <p className="font-geist text-xs text-amber-500 uppercase tracking-widest">LIVE FREE PUBLIC DATA FEED SOURCES & AI INTEGRATION</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="glass-card rounded-xl p-6 space-y-3 border-t border-t-amber-500/50 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.1)]">
+            <h4 className="font-bebas text-lg text-white tracking-widest flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              ChatGPT (OpenAI)
+            </h4>
+            <p className="font-geist text-xs text-white/50 leading-relaxed">
+              Acts as our primary, real-time macroeconomist. Users prompt ChatGPT to fetch real-time, highly specific local economic friction factors (Sales Tax, Import Duties, Logistics, Retail Margins, and Base Cost) instantly.
+            </p>
+            <span className="inline-block px-2.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-400 font-bebas tracking-wider rounded uppercase">
+              REAL-TIME AI VERIFIED
+            </span>
+          </div>
+
           <div className="glass-card rounded-xl p-6 space-y-3">
             <h4 className="font-bebas text-lg text-white tracking-widest">Frankfurter API</h4>
             <p className="font-geist text-xs text-white/50 leading-relaxed">
