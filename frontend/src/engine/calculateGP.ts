@@ -16,10 +16,12 @@ export const parseChatGPTResponse = (response: string): ParsedData | null => {
     const data = JSON.parse(jsonStr) as ParsedData;
     return data;
   } catch (err) {
-    console.error("Failed to parse ChatGPT response", err);
+    console.error("Failed to parse JSON response", err);
     return null;
   }
 };
+
+export const parseClaudeResponse = parseChatGPTResponse;
 
 export const validateParsedData = (data: ParsedData): { isValid: boolean, missingKeys: string[] } => {
   const requiredKeys: (keyof ParsedData)[] = [
@@ -85,7 +87,17 @@ export const predictCountryPriceRange = (
   targetCountry: CountryData,
   category: ProductCategory,
   baseData: ParsedData
-): { min: number; max: number; midpoint: number; theta: number } => {
+): { min: number; max: number; midpoint: number; theta: number; is_available: boolean } => {
+  const targetData = baseData.TargetCountries?.[targetCountry.code];
+  
+  // Determine if product is available in target country
+  let is_available = true;
+  if (targetData) {
+    if (targetData.IsAvailable === false || (targetData as any).Available === false || (targetData as any).is_available === false) {
+      is_available = false;
+    }
+  }
+
   // 1. Re-calculate the local friction factor (theta) for the TARGET country
   // We use the existing logic for theta prediction based on target country's typical stats
   let duty = targetCountry.duty_electronics;
@@ -104,13 +116,12 @@ export const predictCountryPriceRange = (
 
   const theta_reference = (1 + duty) * (1 + tax) * targetCountry.logistics_score * (1 + targetCountry.retail_margin);
   
-  const targetData = baseData.TargetCountries?.[targetCountry.code];
   const knownMarketPrice = targetData?.KnownMarketPrice;
 
   let midpoint = 0;
   let final_theta = theta_reference;
 
-  if (knownMarketPrice != null && targetData != null) {
+  if (knownMarketPrice != null && typeof knownMarketPrice === 'number' && targetData != null) {
     const dynamic_duty = targetData.CountryDutyRate ?? duty;
     const dynamic_tax = targetData.CountryTaxRate ?? tax;
     const dynamic_logistics = targetData.LogisticsPremium ?? targetCountry.logistics_score;
@@ -142,6 +153,7 @@ export const predictCountryPriceRange = (
     min: isNaN(min) || min < 0 ? 0 : min,
     max: isNaN(max) || max < 0 ? 0 : max,
     midpoint: isNaN(midpoint) || midpoint < 0 ? 0 : midpoint,
-    theta: final_theta
+    theta: final_theta,
+    is_available
   };
 };

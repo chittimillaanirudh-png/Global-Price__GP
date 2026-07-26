@@ -1,5 +1,5 @@
 // src/pages/Calculator.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
@@ -45,10 +45,10 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // --- GPT Flow States ---
+  // --- Gemini AI Flow States ---
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [chatGptResponse, setChatGptResponse] = useState("");
-  const [gptError, setGptError] = useState("");
+  const [geminiResponse, setGeminiResponse] = useState("");
+  const [geminiError, setGeminiError] = useState("");
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
 
   // --- UI Lifecycle States ---
@@ -139,10 +139,12 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
     setStep(2);
   };
 
-  // Generate ChatGPT prompt
+  // Generate Gemini prompt
   const generatePrompt = () => {
+    const allCountryCodes = COUNTRIES.map(c => c.code).join(", ");
     return `Please act as a global trade economist. I am analyzing the product "${productName} ${variant}" in ${homeCountry?.name} (Category: ${category.name}). The local retail price is ${localPrice} ${homeCountry?.currency}.
-Please provide the following data for ${homeCountry?.name} AND for as many target countries as you have reliable data for, in a strict JSON format EXACTLY like this (do not include markdown formatting or extra text, just the raw JSON):
+
+Please provide the following data for ${homeCountry?.name} AND for all 195 countries in a strict JSON format EXACTLY like this (do not include markdown formatting or extra text, just the raw JSON):
 {
   "BaseRetailCost": <the base retail cost in ${homeCountry?.currency} before any taxes or duties in ${homeCountry?.name}>,
   "CountryTaxRate": <average sales tax/VAT in decimal for ${homeCountry?.name}>,
@@ -155,7 +157,8 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
   "CPIBase": <Base Consumer Price Index (e.g. 2010=100) for ${homeCountry?.name}>,
   "KnownMarketPrice": <Your known real market price for the product in ${homeCountry?.name}, or null if unknown>,
   "TargetCountries": {
-    "<Country Code (e.g., US, GB, IN)>": {
+    "<Country Code>": {
+      "IsAvailable": <true if product is officially available/sold in this country, false if NOT available/sold in this country>,
       "CountryTaxRate": <tax/VAT in decimal>,
       "CountryDutyRate": <import duty in decimal>,
       "LogisticsPremium": <logistics modifier>,
@@ -163,34 +166,39 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
       "ExchangeRate": <Exchange rate to USD>,
       "CPICurrent": <Current CPI>,
       "CPIBase": <Base CPI>,
-      "KnownMarketPrice": <Your known real market price for the product in this target country, or null if unknown>
+      "KnownMarketPrice": <Your known real market price for the product in this target country, or null if unknown or not available>
     }
   }
-}`;
+}
+
+IMPORTANT REQUIREMENTS:
+1. Please include parameters for ALL 195 countries in TargetCountries using their 2-letter codes:
+${allCountryCodes}
+2. If the product "${productName} ${variant}" is NOT officially available, sold, or distributed in a particular country (e.g., region-locked, unsold, or restricted), set "IsAvailable": false and "KnownMarketPrice": null for that country. If available, set "IsAvailable": true.`;
   };
 
   const copyPrompt = () => {
     navigator.clipboard.writeText(generatePrompt());
-    addToast("success", "Copied!", "Prompt copied to clipboard. Open ChatGPT to paste it.");
+    addToast("success", "Copied!", "Prompt copied to clipboard. Open Gemini AI to paste it.");
   };
 
-  const handleChatGPTParse = () => {
-    if (!chatGptResponse.trim()) {
-      setGptError("Please paste the ChatGPT response.");
+  const handleGeminiParse = () => {
+    if (!geminiResponse.trim()) {
+      setGeminiError("Please paste the Gemini AI response.");
       return;
     }
-    const parsed = parseChatGPTResponse(chatGptResponse);
+    const parsed = parseChatGPTResponse(geminiResponse);
     if (!parsed) {
-      setGptError("Could not find valid JSON in the response. Please ensure ChatGPT outputted the JSON block.");
+      setGeminiError("Could not find valid JSON in the response. Please ensure Gemini AI outputted the JSON block.");
       return;
     }
     const { isValid, missingKeys } = validateParsedData(parsed);
     if (!isValid) {
-      setGptError(`Missing required keys: ${missingKeys.join(", ")}`);
+      setGeminiError(`Missing required keys: ${missingKeys.join(", ")}`);
       return;
     }
     
-    setGptError("");
+    setGeminiError("");
     setParsedData(parsed);
     setIsCalculating(true);
     setStep(4);
@@ -209,10 +217,6 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
     // Run Reverse Predictions for all 195 countries
     const homeRates = rates[homeCountry.currency] ?? homeCountry.ppp_fallback;
     const userPriceUSD = priceNum / homeRates;
-
-    // Determine Top 20 countries by GDP to mark as "Verified Data" (since they have the most reliable macro data)
-    const sortedByGDP = [...COUNTRIES].sort((a, b) => b.gdp_ppp_billion - a.gdp_ppp_billion);
-    const top20Codes = new Set(sortedByGDP.slice(0, 20).map(c => c.code));
 
     const list: CountryPrediction[] = COUNTRIES.map((c) => {
       const pred = predictCountryPriceRange(gpResult.GP, c, category, parsedData);
@@ -236,7 +240,8 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
         vs_user_percent,
         is_cheaper: predictedUSD < userPriceUSD,
         is_priority: priorityCountry?.code === c.code,
-        is_verified: top20Codes.has(c.code) || c.code === homeCountry.code
+        is_verified: pred.is_available !== false, // Verified data for all available countries
+        is_available: pred.is_available
       };
     });
 
@@ -245,23 +250,26 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
     addToast("success", "Calculation Complete", `Analyzed value and predicted pricing across ${list.length} countries successfully.`);
   };
 
-  // Filter & Sort Predictions
-  const getFilteredPredictions = () => {
+  // Filter & Sort Predictions with Memoization to prevent UI lag
+  const { priorityItem, normalList } = useMemo(() => {
     const q = searchQuery.toLowerCase();
     
-    // Split into priority item and normal items
     const matching = predictions.filter(p => p.country.name.toLowerCase().includes(q));
     
     let sorted = [...matching];
 
     if (sortBy === "price-low-high") {
       sorted.sort((a, b) => {
+        if (a.is_available === false) return 1;
+        if (b.is_available === false) return -1;
         const aUSD = a.predicted_price / (rates[a.country.currency] ?? a.country.ppp_fallback);
         const bUSD = b.predicted_price / (rates[b.country.currency] ?? b.country.ppp_fallback);
         return aUSD - bUSD;
       });
     } else if (sortBy === "price-high-low") {
       sorted.sort((a, b) => {
+        if (a.is_available === false) return 1;
+        if (b.is_available === false) return -1;
         const aUSD = a.predicted_price / (rates[a.country.currency] ?? a.country.ppp_fallback);
         const bUSD = b.predicted_price / (rates[b.country.currency] ?? b.country.ppp_fallback);
         return bUSD - aUSD;
@@ -270,8 +278,6 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
       sorted.sort((a, b) => a.country.name.localeCompare(b.country.name));
     }
 
-    // If priority country exists and matches query, make sure it is isolated out of normal sorting
-    // so it always stays at the absolute top of the UI
     if (priorityCountry) {
       const priorityItem = sorted.find(p => p.country.code === priorityCountry.code);
       if (priorityItem) {
@@ -281,9 +287,7 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
     }
 
     return { priorityItem: null, normalList: sorted };
-  };
-
-  const { priorityItem, normalList } = getFilteredPredictions();
+  }, [predictions, searchQuery, sortBy, priorityCountry, rates]);
 
   // Export predictions as CSV
   const exportToCSV = () => {
@@ -294,9 +298,9 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
         p.country.name,
         p.country.currency,
         p.country.symbol,
-        p.predicted_price.toFixed(2),
+        p.is_available !== false ? p.predicted_price.toFixed(2) : "Not Available in Country",
         p.theta.toFixed(3),
-        p.vs_user_percent.toFixed(2),
+        p.is_available !== false ? p.vs_user_percent.toFixed(2) : "N/A",
         calculationResult.GP.toFixed(3)
       ]);
 
@@ -533,11 +537,18 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
           doc.setTextColor(220, 220, 220); // Off-white for general lists
         }
 
-        const vsText = isHome 
-          ? "BASE PRICE" 
-          : pred.vs_user_percent === 0 
-            ? "Baseline" 
-            : `${pred.vs_user_percent > 0 ? "+" : ""}${pred.vs_user_percent.toFixed(1)}% ${pred.is_cheaper ? "cheaper" : "costlier"}`;
+        const isAvailable = pred.is_available !== false;
+        const vsText = !isAvailable
+          ? "N/A"
+          : isHome 
+            ? "BASE PRICE" 
+            : pred.vs_user_percent === 0 
+              ? "Baseline" 
+              : `${pred.vs_user_percent > 0 ? "+" : ""}${pred.vs_user_percent.toFixed(1)}% ${pred.is_cheaper ? "cheaper" : "costlier"}`;
+
+        const priceText = isAvailable
+          ? `${pred.country.symbol}${pred.predicted_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+          : "Not Available";
 
         const countryLabel = `${pred.country.name} (${pred.country.code})${isHome ? " [HOME]" : ""}${isPriority ? " [PRIORITY]" : ""}`;
 
@@ -549,7 +560,7 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
         doc.text(pred.country.currency, 75, y + 5.5);
         
         doc.setFont("helvetica", isHome || isPriority ? "bold" : "normal");
-        doc.text(`${pred.country.symbol}${pred.predicted_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 105, y + 5.5);
+        doc.text(priceText, 105, y + 5.5);
         
         doc.setFont("helvetica", "normal");
         doc.text(vsText, 145, y + 5.5);
@@ -730,7 +741,7 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
           </motion.div>
         )}
 
-        {/* Step 2: ChatGPT Prompt Generation */}
+        {/* Step 2: Gemini AI Prompt Generation */}
         {step === 2 && !isCalculating && !showResults && (
           <motion.div
             key="promptPanel"
@@ -754,7 +765,7 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
 
               <p className="text-sm font-light text-white/70 leading-relaxed">
                 To calculate a highly accurate Global Price, we need to strip away local friction factors. 
-                Please copy the prompt below, paste it into ChatGPT, and bring back the resulting JSON block.
+                Please copy the prompt below, paste it into Gemini AI, and bring back the resulting JSON block.
               </p>
 
               <div className="relative group">
@@ -774,12 +785,12 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                   <Check className="w-5 h-5" /> COPY PROMPT
                 </button>
                 <a
-                  href="https://chatgpt.com/"
+                  href="https://gemini.google.com/app?hl=en-IN"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-1/2 h-14 rounded-xl font-bebas text-lg tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <ArrowUpRight className="w-5 h-5 text-amber-400" /> OPEN CHATGPT
+                  <ArrowUpRight className="w-5 h-5 text-amber-400" /> OPEN GEMINI AI
                 </a>
               </div>
 
@@ -795,7 +806,7 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
           </motion.div>
         )}
 
-        {/* Step 3: Paste ChatGPT JSON Response */}
+        {/* Step 3: Paste Gemini AI JSON Response */}
         {step === 3 && !isCalculating && !showResults && (
           <motion.div
             key="pastePanel"
@@ -818,32 +829,32 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
               </div>
 
               <p className="text-sm font-light text-white/70 leading-relaxed">
-                Paste the JSON data outputted by ChatGPT into the box below.
+                Paste the JSON data outputted by Gemini AI into the box below.
               </p>
 
-              {gptError && (
+              {geminiError && (
                 <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex gap-3 items-start">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-semibold text-red-400 text-sm">Validation Error</h4>
-                    <p className="text-xs text-red-200/70 mt-1">{gptError}</p>
+                    <p className="text-xs text-red-200/70 mt-1">{geminiError}</p>
                     <p className="text-xs text-red-200/50 mt-2 font-mono italic">
-                      If ChatGPT missed fields, tell it: "You missed some fields. Please provide the exact JSON structure requested."
+                      If Gemini AI missed fields, tell it: "You missed some fields. Please provide the exact JSON structure requested."
                     </p>
                   </div>
                 </div>
               )}
 
               <textarea
-                value={chatGptResponse}
-                onChange={(e) => setChatGptResponse(e.target.value)}
+                value={geminiResponse}
+                onChange={(e) => setGeminiResponse(e.target.value)}
                 placeholder="{\n  &quot;BaseRetailCost&quot;: 1000,\n  ...\n}"
                 className="w-full h-64 p-4 rounded-xl bg-black/50 border border-white/10 text-sm font-mono text-amber-500/90 focus:border-amber-500/50 outline-none resize-y transition-colors"
               />
 
               <div className="pt-4">
                 <button
-                  onClick={handleChatGPTParse}
+                  onClick={handleGeminiParse}
                   className="w-full h-14 rounded-xl font-bebas text-lg tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2 transition-all"
                 >
                   <Search className="w-5 h-5 text-amber-400" /> VALIDATE & CALCULATE
@@ -900,12 +911,12 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                   <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-amber-500/5 to-transparent opacity-60 pointer-events-none" />
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
-                  <div className="flex justify-between items-start relative z-10">
+                  <div className="flex justify-between items-center relative z-10 w-full">
                     <div className="flex flex-col">
-                      <span className="font-bebas text-lg tracking-[0.25em] text-white">GLOBAL PRICE CARD</span>
-                      <span className="text-[7px] text-amber-500/70 uppercase tracking-widest font-mono">Universal Standard Metric</span>
+                      <span className="font-bebas text-lg tracking-[0.2em] text-white whitespace-nowrap leading-none">GLOBAL PRICE CARD</span>
+                      <span className="text-[7px] text-amber-500/70 uppercase tracking-widest font-mono whitespace-nowrap mt-1">Universal Standard Metric</span>
                     </div>
-                    <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 rounded text-amber-400 font-bebas text-[10px] tracking-wider shrink-0">
+                    <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded text-amber-400 font-bebas text-[10px] tracking-wider shrink-0 whitespace-nowrap">
                       GP STANDARD
                     </div>
                   </div>
@@ -927,8 +938,8 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                   </div>
 
                   <div className="my-3 relative z-10">
-                    <span className="text-white/35 font-mono text-[7px] uppercase tracking-wider block mb-0.5">SERIAL</span>
-                    <div className="font-mono text-3xl font-semibold text-white tracking-[0.18em] flex items-center gap-1 drop-shadow-[0_0_12px_rgba(245,158,11,0.55)]">
+                    <span className="text-white/35 font-mono text-[7px] uppercase tracking-wider block mb-0.5 whitespace-nowrap">SERIAL</span>
+                    <div className="font-mono text-3xl font-semibold text-white tracking-[0.18em] flex items-center gap-1 drop-shadow-[0_0_12px_rgba(245,158,11,0.55)] whitespace-nowrap">
                       <span>GP</span>
                       <span className="text-amber-500">-</span>
                       <span>{calculationResult.GP.toFixed(3)}</span>
@@ -938,11 +949,11 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
 
                   <div className="flex justify-between items-end pt-2 border-t border-white/5 relative z-10 mt-0">
                     <div className="flex flex-col max-w-full min-w-0">
-                      <span className="text-[7px] text-white/30 uppercase tracking-widest font-mono">PRODUCT</span>
-                      <span className="font-bebas text-sm text-amber-200 tracking-wider truncate uppercase mt-0.5" title={productName}>
+                      <span className="text-[7px] text-white/30 uppercase tracking-widest font-mono whitespace-nowrap">PRODUCT</span>
+                      <span className="font-bebas text-sm text-amber-200 tracking-wider truncate uppercase mt-0.5 whitespace-nowrap" title={productName}>
                         {productName || "STANDARD BASKET"}
                       </span>
-                      <div className="flex flex-wrap gap-2 text-[7px] font-mono text-white/45 mt-1">
+                      <div className="flex flex-wrap gap-2 text-[7px] font-mono text-white/45 mt-1 whitespace-nowrap">
                         <span>CONF: <span className="text-green-400 font-bold">{calculationResult.confidence.toUpperCase()}</span></span>
                         <span>THETA: <span className="text-amber-400 font-bold">{calculationResult.theta.toFixed(3)}</span></span>
                       </div>
@@ -961,12 +972,12 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                 <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
                 {/* Top Row: Card Issuer & Logo */}
-                <div className="flex justify-between items-start relative z-10">
-                  <div className="flex flex-col">
-                    <span className="font-bebas text-sm sm:text-lg tracking-[0.2em] sm:tracking-[0.25em] text-white">GLOBAL PRICE CARD</span>
-                    <span className="text-[6px] sm:text-[7px] text-amber-500/70 uppercase tracking-widest font-mono">Universal Standard Metric</span>
+                <div className="flex justify-between items-center relative z-10 w-full">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bebas text-sm sm:text-lg tracking-[0.15em] sm:tracking-[0.25em] text-white whitespace-nowrap leading-none">GLOBAL PRICE CARD</span>
+                    <span className="text-[6px] sm:text-[7px] text-amber-500/70 uppercase tracking-widest font-mono whitespace-nowrap mt-0.5 sm:mt-1">Universal Standard Metric</span>
                   </div>
-                  <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 sm:px-2 rounded text-amber-400 font-bebas text-[8px] sm:text-[10px] tracking-wider shrink-0">
+                  <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 sm:px-2 rounded text-amber-400 font-bebas text-[8px] sm:text-[10px] tracking-wider shrink-0 whitespace-nowrap">
                     GP STANDARD
                   </div>
                 </div>
@@ -1138,13 +1149,9 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                               <span className="inline-block text-[9px] bg-amber-500/20 text-amber-300 font-bebas tracking-wider px-1.5 py-0.5 rounded uppercase">
                                 PRIORITY COUNTRY
                               </span>
-                              {priorityItem.is_verified ? (
+                              {priorityItem.is_verified && (
                                 <span className="inline-flex items-center gap-1 text-[9px] bg-green-500/20 text-green-400 font-geist px-1.5 py-0.5 rounded uppercase border border-green-500/30 font-bold">
                                   <Check className="w-2.5 h-2.5" /> Verified Data
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[9px] bg-amber-500/20 text-amber-400 font-geist px-1.5 py-0.5 rounded uppercase border border-amber-500/30 font-bold">
-                                  <AlertTriangle className="w-2.5 h-2.5" /> Estimated
                                 </span>
                               )}
                             </div>
@@ -1154,19 +1161,30 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                           {priorityItem.country.currency}
                         </td>
                         <td className="py-4.5 px-4 text-right font-semibold text-white text-base">
-                          <span className="text-white/40 text-xs mr-1">{priorityItem.country.symbol}</span>
-                          {priorityItem.predicted_price_min.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
-                          <span className="text-white/30 mx-1">—</span>
-                          {priorityItem.predicted_price_max.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
+                          {priorityItem.is_available === false ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/25 text-red-400 font-sans text-xs font-medium">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Not Available in Country
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-white/40 text-xs mr-1">{priorityItem.country.symbol}</span>
+                              {priorityItem.predicted_price_min.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                              <span className="text-white/30 mx-1">—</span>
+                              {priorityItem.predicted_price_max.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </>
+                          )}
                         </td>
                         <td className={`py-4.5 px-4 text-right sm:table-cell ${showDetailsMobile ? 'table-cell' : 'hidden'}`}>
-                          {priorityItem.vs_user_percent === 0 ? (
+                          {priorityItem.is_available === false ? (
+                            <span className="text-white/30 text-xs">N/A</span>
+                          ) : priorityItem.vs_user_percent === 0 ? (
                             <span className="text-white/30 text-xs">Baseline</span>
                           ) : priorityItem.is_cheaper ? (
                             <span className="text-green-400 font-medium inline-flex items-center gap-0.5 text-xs">
@@ -1221,13 +1239,9 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                                     </span>
                                   )}
                                 </div>
-                                {pred.is_verified ? (
+                                {pred.is_verified && (
                                   <span className="inline-flex items-center gap-1 text-[9px] bg-green-500/20 text-green-400 font-geist px-1.5 py-0.5 rounded uppercase border border-green-500/30 font-bold">
                                     <Check className="w-2.5 h-2.5" /> Verified Data
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[9px] bg-amber-500/20 text-amber-400 font-geist px-1.5 py-0.5 rounded uppercase border border-amber-500/30 font-bold">
-                                    <AlertTriangle className="w-2.5 h-2.5" /> Estimated
                                   </span>
                                 )}
                               </div>
@@ -1236,19 +1250,30 @@ Please provide the following data for ${homeCountry?.name} AND for as many targe
                               {pred.country.currency}
                             </td>
                             <td className="py-3.5 px-4 text-right font-bold text-white text-sm md:text-base">
-                              <span className="text-white/30 text-xs font-normal mr-1">{pred.country.symbol}</span>
-                              {pred.predicted_price_min.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2
-                              })}
-                              <span className="text-white/20 font-normal mx-1 text-xs">—</span>
-                              {pred.predicted_price_max.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2
-                              })}
+                              {pred.is_available === false ? (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/25 text-red-400 font-sans text-xs font-medium">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  Not Available in Country
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-white/30 text-xs font-normal mr-1">{pred.country.symbol}</span>
+                                  {pred.predicted_price_min.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                  <span className="text-white/20 font-normal mx-1 text-xs">—</span>
+                                  {pred.predicted_price_max.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </>
+                              )}
                             </td>
                             <td className={`py-3.5 px-4 text-right sm:table-cell ${showDetailsMobile ? 'table-cell' : 'hidden'}`}>
-                              {isHome ? (
+                              {pred.is_available === false ? (
+                                <span className="text-white/30 text-xs">N/A</span>
+                              ) : isHome ? (
                                 <span className="text-amber-400 font-bebas tracking-wider text-xs">BASE PRICE</span>
                               ) : pred.vs_user_percent === 0 ? (
                                 <span className="text-white/30 text-xs">Baseline</span>

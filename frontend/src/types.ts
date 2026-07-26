@@ -54,6 +54,7 @@ export interface GPResult {
 }
 
 export interface TargetCountryData {
+  IsAvailable?: boolean;
   CountryTaxRate?: number;
   CountryDutyRate?: number;
   LogisticsPremium?: number;
@@ -88,6 +89,7 @@ export interface CountryPrediction {
   is_cheaper: boolean;
   is_priority: boolean;
   is_verified?: boolean;
+  is_available?: boolean;
 }
 
 export interface CalculatorInput {

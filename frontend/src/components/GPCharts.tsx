@@ -1,8 +1,8 @@
 // src/components/GPCharts.tsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { CountryPrediction, ExchangeRates, CountryData } from "../types";
-import { BarChart, AreaChart, TrendingUp, DollarSign, Globe, Award } from "lucide-react";
+import { BarChart, Globe, Award } from "lucide-react";
 
 interface GPChartsProps {
   predictions: CountryPrediction[];
@@ -20,81 +20,108 @@ export const GPCharts: React.FC<GPChartsProps> = ({ predictions, rates, homeCoun
     return pred.predicted_price / (rate || 1);
   };
 
-  // --- CHART 1: REGIONAL REPRESENTATIVES (BAR CHART) ---
-  const representativeCodes = ["US", "DE", "JP", "IN", "BR", "GB", "AU", "ZA"];
-  const barData = representativeCodes
-    .map(code => predictions.find(p => p.country.code === code))
-    .filter((p): p is CountryPrediction => !!p)
-    .map(p => ({
-      name: p.country.name,
-      code: p.country.code,
-      flag: p.country.flag,
-      symbol: p.country.symbol,
-      localPrice: p.predicted_price,
-      currency: p.country.currency,
-      usdPrice: getUSDVal(p),
-    }));
+  // Memoized calculations for ultra-smooth performance
+  const chartData = useMemo(() => {
+    const availablePredictions = predictions.filter(p => p.is_available !== false);
 
-  const maxUSDPrice = barData.length > 0 ? Math.max(...barData.map(d => d.usdPrice)) : 100;
+    // --- CHART 1: REGIONAL REPRESENTATIVES (BAR CHART) ---
+    const representativeCodes = ["US", "DE", "JP", "IN", "BR", "GB", "AU", "ZA"];
+    const barData = representativeCodes
+      .map(code => availablePredictions.find(p => p.country.code === code))
+      .filter((p): p is CountryPrediction => !!p)
+      .map(p => ({
+        name: p.country.name,
+        code: p.country.code,
+        flag: p.country.flag,
+        symbol: p.country.symbol,
+        localPrice: p.predicted_price,
+        currency: p.country.currency,
+        usdPrice: getUSDVal(p),
+      }));
 
-  // --- CHART 2: GLOBAL VALUE DISTRIBUTION (CURVE AREA CHART) ---
-  // Sort all countries by USD price to find distribution
-  const sortedPredictions = [...predictions]
-    .map(p => ({
-      country: p.country,
-      usdPrice: getUSDVal(p),
-      localPrice: p.predicted_price
-    }))
-    .sort((a, b) => a.usdPrice - b.usdPrice);
+    const maxUSDPrice = barData.length > 0 ? Math.max(...barData.map(d => d.usdPrice)) : 100;
 
-  // Sample 10 countries across the distribution curve (0%, 11%, 22%, ..., 100%)
-  const sampleCount = 9;
-  const areaData = Array.from({ length: sampleCount }).map((_, i) => {
-    const index = Math.min(
-      Math.floor((i / (sampleCount - 1)) * (sortedPredictions.length - 1)),
-      sortedPredictions.length - 1
-    );
-    return sortedPredictions[index];
-  });
+    // --- CHART 2: GLOBAL VALUE DISTRIBUTION (CURVE AREA CHART) ---
+    const sortedPredictions = [...availablePredictions]
+      .map(p => ({
+        country: p.country,
+        usdPrice: getUSDVal(p),
+        localPrice: p.predicted_price
+      }))
+      .sort((a, b) => a.usdPrice - b.usdPrice);
 
-  const areaMaxUSD = areaData.length > 0 ? Math.max(...areaData.map(d => d.usdPrice)) : 100;
-  const areaMinUSD = areaData.length > 0 ? Math.min(...areaData.map(d => d.usdPrice)) : 0;
+    const sampleCount = 9;
+    const areaData = Array.from({ length: sampleCount }).map((_, i) => {
+      const index = Math.min(
+        Math.floor((i / (sampleCount - 1)) * (sortedPredictions.length - 1)),
+        sortedPredictions.length - 1
+      );
+      return sortedPredictions[index];
+    });
 
-  // Generate SVG path coordinates for Area Chart
-  const svgWidth = 500;
-  const svgHeight = 160;
-  const padding = 20;
-  const chartW = svgWidth - padding * 2;
-  const chartH = svgHeight - padding * 2;
+    const areaMaxUSD = areaData.length > 0 ? Math.max(...areaData.map(d => d ? d.usdPrice : 0)) : 100;
+    const areaMinUSD = areaData.length > 0 ? Math.min(...areaData.map(d => d ? d.usdPrice : 0)) : 0;
 
-  const points = areaData.map((d, i) => {
-    const x = padding + (i / (sampleCount - 1)) * chartW;
-    // Scale y from min to max USD
-    const range = areaMaxUSD - areaMinUSD || 1;
-    const y = padding + chartH - ((d.usdPrice - areaMinUSD) / range) * chartH;
-    return { x, y, data: d };
-  });
+    const svgWidth = 500;
+    const svgHeight = 160;
+    const padding = 20;
+    const chartW = svgWidth - padding * 2;
+    const chartH = svgHeight - padding * 2;
 
-  // SVG Line path string
-  let linePath = "";
-  if (points.length > 0) {
-    linePath = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      // Create a smooth cubic curve between points
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpX1 = prev.x + (curr.x - prev.x) / 2;
-      const cpY1 = prev.y;
-      const cpX2 = prev.x + (curr.x - prev.x) / 2;
-      const cpY2 = curr.y;
-      linePath += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${curr.x} ${curr.y}`;
+    const points = areaData.map((d, i) => {
+      if (!d) return { x: 0, y: 0, data: { country: { name: "", code: "", flag: "", symbol: "", currency: "" }, localPrice: 0, usdPrice: 0 } };
+      const x = padding + (i / (sampleCount - 1)) * chartW;
+      const range = areaMaxUSD - areaMinUSD || 1;
+      const y = padding + chartH - ((d.usdPrice - areaMinUSD) / range) * chartH;
+      return { x, y, data: d };
+    });
+
+    let linePath = "";
+    if (points.length > 0) {
+      linePath = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const cpX1 = prev.x + (curr.x - prev.x) / 2;
+        const cpY1 = prev.y;
+        const cpX2 = prev.x + (curr.x - prev.x) / 2;
+        const cpY2 = curr.y;
+        linePath += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${curr.x} ${curr.y}`;
+      }
     }
-  }
 
-  // SVG Area path string (goes down to bottom to fill the gradient)
-  const areaPath = points.length > 0
-    ? `${linePath} L ${points[points.length - 1].x} ${svgHeight - padding} L ${points[0].x} ${svgHeight - padding} Z`
-    : "";
+    const areaPath = points.length > 0
+      ? `${linePath} L ${points[points.length - 1].x} ${svgHeight - padding} L ${points[0].x} ${svgHeight - padding} Z`
+      : "";
+
+    return {
+      barData,
+      maxUSDPrice,
+      areaData,
+      areaMaxUSD,
+      areaMinUSD,
+      svgWidth,
+      svgHeight,
+      points,
+      linePath,
+      areaPath,
+      sampleCount
+    };
+  }, [predictions, rates]);
+
+  const {
+    barData,
+    maxUSDPrice,
+    areaData,
+    areaMaxUSD,
+    areaMinUSD,
+    svgWidth,
+    svgHeight,
+    points,
+    linePath,
+    areaPath,
+    sampleCount
+  } = chartData;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
