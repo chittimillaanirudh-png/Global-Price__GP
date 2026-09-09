@@ -90,7 +90,7 @@ export const GPExplanation: React.FC<GPExplanationProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="w-full text-white bg-[#030303] min-h-screen font-sans pb-24">
+    <div className="relative z-10 w-full text-white bg-transparent min-h-screen font-sans pb-24">
       {/* ─────────────────────────────────────────────────────────────
           STORYTELLING PRESENTATION HEADER / HERO
       ───────────────────────────────────────────────────────────── */}
@@ -1084,57 +1084,123 @@ export const GPExplanation: React.FC<GPExplanationProps> = ({ onNavigate }) => {
         </section>
 
         {/* ─────────────────────────────────────────────────────────────
-            SECTION 6 — COMPLETE SYSTEM ARCHITECTURE DIAGRAM
+            SECTION 6 — GP SYSTEM MIND MAP & ARCHITECTURE FLOW
         ───────────────────────────────────────────────────────────── */}
         <section id="system-flow" className="scroll-mt-36 space-y-8">
           <div className="border-l-4 border-amber-500 pl-4 space-y-2">
-            <span className="font-mono text-xs text-amber-400 tracking-widest uppercase font-semibold">COMPLETE SYSTEM ARCHITECTURE</span>
+            <span className="font-mono text-xs text-amber-400 tracking-widest uppercase font-semibold">GP SYSTEM MIND MAP & ARCHITECTURE</span>
             <h2 className="font-bebas text-3xl sm:text-5xl tracking-widest text-white uppercase">
-              06 — END-TO-END GP ENGINE FLOW
+              06 — SYSTEM MIND MAP & ARCHITECTURE FLOW
             </h2>
+            <p className="font-geist text-sm text-white/70 font-light">
+              An interactive visual Mind Map depicting how inputs, parameters, forward normalization, and reverse prediction connect around the central GP Engine core.
+            </p>
           </div>
 
-          <div className="glass-card rounded-2xl p-6 sm:p-8 border border-white/10 space-y-6 text-center">
-            <div className="max-w-4xl mx-auto space-y-4 font-mono text-xs">
+          <div className="glass-card rounded-2xl p-6 sm:p-10 border border-amber-500/30 space-y-8 relative overflow-hidden bg-black/40 backdrop-blur-md">
+            
+            {/* Mind Map Central Hub */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              whileInView={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="text-center max-w-md mx-auto p-6 rounded-3xl bg-gradient-to-r from-amber-500/30 via-amber-400/10 to-amber-500/30 border-2 border-amber-400 shadow-[0_0_40px_rgba(245,158,11,0.3)] space-y-2 relative z-10"
+            >
+              <span className="text-[10px] font-mono tracking-widest text-amber-300 uppercase font-semibold">CORE MIND MAP HUB</span>
+              <h3 className="font-bebas text-3xl text-white tracking-widest">GLOBAL PRICE UNIT (GP_p)</h3>
+              <p className="text-xs text-amber-100 font-mono">Physical Basket-Anchored Value Standard</p>
+            </motion.div>
+
+            {/* 4 Mind Map Branch Pillars */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
               
-              <div className="p-4 rounded-xl bg-white/5 border border-white/10 max-w-sm mx-auto">
-                <span className="text-amber-400 font-bold block">1. USER INPUT</span>
-                <span className="text-white/60 text-[11px]">Product + Country + Local Price P(p,c)</span>
-              </div>
-
-              <ArrowDown className="w-5 h-5 text-amber-400 mx-auto animate-bounce" />
-
-              <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 max-w-sm mx-auto">
-                <span className="text-sky-300 font-bold block">2. DATA LAYER</span>
-                <span className="text-white/60 text-[11px]">Exchange (E_c), PPP_c, CPI_c, GDP_c, Tax, Duty</span>
-              </div>
-
-              <ArrowDown className="w-5 h-5 text-amber-400 mx-auto animate-bounce" />
-
-              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 max-w-sm mx-auto">
-                <span className="text-purple-300 font-bold block">3. GFRB & FRICTION ADJUSTMENT</span>
-                <span className="text-white/60 text-[11px]">Calculate V_c & Regional Factor θ(p,c)</span>
-              </div>
-
-              <ArrowDown className="w-5 h-5 text-amber-400 mx-auto animate-bounce" />
-
-              <div className="p-4 rounded-xl bg-amber-500/20 border border-amber-500/50 max-w-sm mx-auto shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-                <span className="text-amber-300 font-bold block text-sm">4. FORWARD ENGINE (GP_p)</span>
-                <span className="text-amber-100 text-[11px]">Clean → Normalize PPNP → Aggregate W_c → EWMA Smooth</span>
-              </div>
-
-              <ArrowDown className="w-5 h-5 text-amber-400 mx-auto animate-bounce" />
-
-              <div className="p-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40 max-w-lg mx-auto">
-                <span className="text-emerald-300 font-bold block">5. REVERSE ENGINE → PREDICTED LOCAL PRICES</span>
-                <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
-                  <div className="p-2 bg-white/5 rounded">🇮🇳 India (₹ Price)</div>
-                  <div className="p-2 bg-white/5 rounded">🇺🇸 USA ($ Price)</div>
-                  <div className="p-2 bg-white/5 rounded">🇩🇪 Germany (€ Price)</div>
+              {/* Branch 1: INPUT DATA LAYER */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                viewport={{ once: true }}
+                className="p-5 rounded-2xl bg-white/5 border border-sky-500/30 hover:border-sky-400/60 transition-all space-y-3"
+              >
+                <div className="flex items-center gap-2 text-sky-400 border-b border-sky-500/20 pb-2">
+                  <Database className="w-5 h-5" />
+                  <h4 className="font-bebas text-xl tracking-wider">1. INPUT DATA BRANCH</h4>
                 </div>
-              </div>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">P(p,c): Local Price</div>
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">E_c: Exchange Rate</div>
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">PPP_c: World Bank PPP</div>
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">CPI_c / CPI_0: Inflation</div>
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">GDP_c: Country Scale</div>
+                  <div className="p-2 rounded bg-sky-500/10 text-sky-200">Frictions: Tax, Duty, Log</div>
+                </div>
+              </motion.div>
+
+              {/* Branch 2: FORWARD ENGINE */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                viewport={{ once: true }}
+                className="p-5 rounded-2xl bg-white/5 border border-purple-500/30 hover:border-purple-400/60 transition-all space-y-3"
+              >
+                <div className="flex items-center gap-2 text-purple-400 border-b border-purple-500/20 pb-2">
+                  <Cpu className="w-5 h-5" />
+                  <h4 className="font-bebas text-xl tracking-wider">2. FORWARD MATRIX ENGINE</h4>
+                </div>
+                <div className="space-y-1.5 text-xs font-mono">
+                  <div className="p-2 rounded bg-purple-500/10 text-purple-200">θ(p,c) = (1+Duty)(1+Tax)LOG(1+Margin)</div>
+                  <div className="p-2 rounded bg-purple-500/10 text-purple-200">P_clean = P(p,c) / θ(p,c)</div>
+                  <div className="p-2 rounded bg-purple-500/10 text-purple-200">PPNP = P_clean / V_c (GFRB Anchor)</div>
+                  <div className="p-2 rounded bg-purple-500/10 text-purple-200">W_c Weighted Sum → EWMA Smooth</div>
+                </div>
+              </motion.div>
+
+              {/* Branch 3: REVERSE PREDICTION */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                viewport={{ once: true }}
+                className="p-5 rounded-2xl bg-white/5 border border-emerald-500/30 hover:border-emerald-400/60 transition-all space-y-3"
+              >
+                <div className="flex items-center gap-2 text-emerald-400 border-b border-emerald-500/20 pb-2">
+                  <TrendingUp className="w-5 h-5" />
+                  <h4 className="font-bebas text-xl tracking-wider">3. REVERSE PREDICTION BRANCH</h4>
+                </div>
+                <div className="space-y-1.5 text-xs font-mono">
+                  <div className="p-2 rounded bg-emerald-500/10 text-emerald-200">P_base = GP_p * V_c * (E_c / PPP_c) * (CPI_c / CPI_0)</div>
+                  <div className="p-2 rounded bg-emerald-500/10 text-emerald-200">P_predicted = P_base * θ(p,c)</div>
+                  <div className="p-2 rounded bg-emerald-500/10 text-emerald-200 flex justify-between">
+                    <span>🇮🇳 India: ₹ Price</span>
+                    <span>🇺🇸 USA: $ Price</span>
+                    <span>🇩🇪 Germany: € Price</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Branch 4: EXPERIMENTAL TESTING */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                viewport={{ once: true }}
+                className="p-5 rounded-2xl bg-white/5 border border-amber-500/30 hover:border-amber-400/60 transition-all space-y-3"
+              >
+                <div className="flex items-center gap-2 text-amber-400 border-b border-amber-500/20 pb-2">
+                  <Activity className="w-5 h-5" />
+                  <h4 className="font-bebas text-xl tracking-wider">4. VALIDATION & METRICS</h4>
+                </div>
+                <div className="space-y-1.5 text-xs font-mono">
+                  <div className="p-2 rounded bg-amber-500/10 text-amber-200">Prediction Error: |Predicted - Actual| / Actual</div>
+                  <div className="p-2 rounded bg-amber-500/10 text-amber-200">Scale-Invariance Proof: P_new/V_new = P/V</div>
+                  <div className="p-2 rounded bg-amber-500/10 text-amber-200">Data Quality Weights DQ_c & EWMA Stability</div>
+                </div>
+              </motion.div>
 
             </div>
+
           </div>
         </section>
 

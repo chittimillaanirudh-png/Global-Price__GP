@@ -6,7 +6,14 @@ import { AppError } from '../utils/errorHandler.js';
 const ADMIN_ID = process.env.ADMIN_ID || '434011';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'GlobalLab@2026';
 
-const ensureDatabaseConnection = () => {
+const ensureDatabaseConnection = async () => {
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI);
+    } catch (err) {
+      console.error('Failed on-demand MongoDB connection:', err.message);
+    }
+  }
   if (mongoose.connection.readyState !== 1) {
     throw new AppError(
       'MongoDB Atlas database is currently connecting or unavailable. Please verify MONGODB_URI on Render and ensure MongoDB Atlas Network Access has IP 0.0.0.0/0 enabled.',
@@ -49,7 +56,7 @@ export const loginAdmin = async (req, res, next) => {
  */
 export const getLatestMarketData = async (_req, res, next) => {
   try {
-    ensureDatabaseConnection();
+    await ensureDatabaseConnection();
     const latestDoc = await MarketData.findOne({ isActive: true }).sort({ createdAt: -1 });
 
     if (!latestDoc) {
@@ -80,7 +87,7 @@ export const getLatestMarketData = async (_req, res, next) => {
  */
 export const updateMarketData = async (req, res, next) => {
   try {
-    ensureDatabaseConnection();
+    await ensureDatabaseConnection();
     const { marketData, title } = req.body || {};
 
     if (!marketData) {
