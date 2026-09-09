@@ -114,7 +114,10 @@
 }
 
 @media (min-width: 768px) {
-  * {
-    cursor: none !important;
+  input, textarea, select, [contenteditable="true"] {
+    cursor: text !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
   }
 }
+

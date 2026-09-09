@@ -287,7 +287,7 @@ Please provide parameters for all 195 countries in strict JSON format: BaseRetai
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
                   placeholder="e.g., Daily Electronics Market Feed - Sept 2026"
-                  className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-geist text-white outline-none focus:border-amber-500/50"
+                  className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-geist text-white outline-none focus:border-amber-500/50 select-text cursor-text"
                 />
               </div>
 
@@ -298,7 +298,7 @@ Please provide parameters for all 195 countries in strict JSON format: BaseRetai
                   value={jsonInput}
                   onChange={(e) => setJsonInput(e.target.value)}
                   placeholder="{\n  &quot;BaseRetailCost&quot;: 1000,\n  ...\n}"
-                  className="w-full h-64 p-4 rounded-xl bg-black/80 border border-white/10 text-xs font-mono text-amber-400 focus:border-amber-500/50 outline-none transition-colors"
+                  className="w-full h-64 p-4 rounded-xl bg-black/80 border border-white/10 text-xs font-mono text-amber-400 focus:border-amber-500/50 outline-none transition-colors select-text cursor-text"
                 />
               </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Key, User, X, AlertTriangle, ArrowRight, Lock } from 'lucide-react';
+import { Shield, Key, User, X, AlertTriangle, ArrowRight, Lock, Eye, EyeOff } from 'lucide-react';
 import { loginAdmin } from '../services/api';
 
 interface AdminLoginModalProps {
@@ -16,6 +16,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 }) => {
   const [adminId, setAdminId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -92,8 +93,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   type="text"
                   value={adminId}
                   onChange={(e) => setAdminId(e.target.value)}
-                  placeholder="e.g. 123456"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-mono text-white focus:border-amber-500/50 outline-none transition-colors"
+                  placeholder="e.g. 434011"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-mono text-white focus:border-amber-500/50 outline-none transition-colors select-text cursor-text"
                 />
               </div>
             </div>
@@ -103,12 +104,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <div className="relative">
                 <Key className="absolute left-3 top-3 w-4 h-4 text-amber-400/60" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-mono text-white focus:border-amber-500/50 outline-none transition-colors"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-mono text-white focus:border-amber-500/50 outline-none transition-colors select-text cursor-text"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-white/50 hover:text-white transition-colors cursor-pointer"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4 text-white/40" />}
+                </button>
               </div>
             </div>
 
