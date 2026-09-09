@@ -16,7 +16,10 @@ const MONGODB_URI = process.env.MONGODB_URI;
 // Connect to MongoDB Atlas
 if (MONGODB_URI) {
   mongoose
-    .connect(MONGODB_URI)
+    .connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000
+    })
     .then(() => {
       console.log(' Successfully connected to MongoDB Atlas Database!');
     })

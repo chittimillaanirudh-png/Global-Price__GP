@@ -730,12 +730,21 @@ ${allCountryCodes}
                   value={category.id}
                   onChange={(val) => {
                     const found = CATEGORIES.find(c => c.id === val);
-                    if (found) setCategory(found);
+                    if (found) {
+                      setCategory(found);
+                      if (found.id !== "smartphones" && found.id !== "laptops") {
+                        addToast(
+                          "warning",
+                          "Experimental Scope Notice",
+                          "Supported categories for this experimental version are Mobile Phones and Laptops."
+                        );
+                      }
+                    }
                   }}
                   placeholder="Select Category"
                 />
-                <span className="text-[10px] text-white/40 italic">
-                  Defines specific tax thresholds, retail margins, and custom duties.
+                <span className="text-[10px] text-amber-400/80 font-mono">
+                  ⚡ Experimental Scope: Supported categories are Mobile Phones and Laptops.
                 </span>
               </div>
 

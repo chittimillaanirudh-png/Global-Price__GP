@@ -66,39 +66,81 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Master Prompt Generator for all 195 countries
   const getMasterAdminPrompt = () => {
     const allCountryCodes = COUNTRIES.map(c => c.code).join(", ");
-    return `Please act as a global trade economist. I am analyzing a reference global product basket to calibrate market friction factors (theta) and purchasing power adjustments across 195 countries.
+    return `Act as a global economic data research assistant.
 
-Please provide the following data for all 195 countries in a strict JSON format EXACTLY like this (do not include markdown formatting or extra text, just raw JSON):
+I am building an experimental Global Price (GP) calculation system.
+
+The GP system uses a Global Fundamental Real Basket (GFRB), country weighting, Regional Market Adjustment Model (RMAM), purchasing-power correction, inflation correction, and EWMA smoothing.
+
+IMPORTANT SCOPE:
+This is an experimental implementation.
+For this experiment, the supported product categories are ONLY:
+1. Mobile Phones
+2. Laptops
+
+Do NOT ask me to provide a product name or category.
+I need ONE COMPLETE MASTER DATASET that can be stored in MongoDB Atlas and reused by the GP calculation engine.
+
+PART 1 — GLOBAL FUNDAMENTAL REAL BASKET (GFRB)
+Provide the latest available reliable values for:
+1. Energy price in USD per MWh
+2. Food/grain price expressed as USD per 1000 kcal equivalent
+3. Steel price in USD per kg
+4. Global median unskilled labor wage in USD per hour
+
+PART 2 — COMMON COUNTRY-LEVEL DATA
+For EACH of the 195 countries, provide: Exchange rate (current & previous), exchange-rate change, PPP factor, current CPI, base CPI, GDP in PPP terms, Data Quality Score, and Logistics Premium.
+
+PART 3 & 4 — PRODUCT PARAMETERS (Mobile Phones & Laptops)
+For EACH of the 195 countries, provide Tax Rate, Import Duty Rate, and Retail Margin estimate for both "mobile_phone" and "laptop".
+
+REQUIRED JSON FORMAT (Return ONLY valid raw JSON without markdown):
 {
-  "BaseRetailCost": 1000,
-  "CountryTaxRate": 0.10,
-  "CountryDutyRate": 0.05,
-  "LogisticsPremium": 1.05,
-  "RetailMargin": 0.15,
-  "GlobalPurchasingPower": 1.00,
-  "ExchangeRate": 1.00,
-  "CPICurrent": 100,
-  "CPIBase": 100,
-  "KnownMarketPrice": 1000,
-  "TargetCountries": {
-    "<Country Code>": {
-      "IsAvailable": true,
-      "CountryTaxRate": 0.10,
-      "CountryDutyRate": 0.05,
-      "LogisticsPremium": 1.05,
-      "RetailMargin": 0.15,
-      "ExchangeRate": 1.00,
-      "CPICurrent": 100,
-      "CPIBase": 100,
-      "KnownMarketPrice": 1000
+  "metadata": {
+    "datasetName": "GP Master Economic Dataset",
+    "version": "1.0",
+    "scope": ["mobile_phone", "laptop"],
+    "countryCount": 195,
+    "generatedAt": "2026-09-09"
+  },
+  "gfrb": {
+    "energyPriceUSDPerMWh": { "value": 120.5, "unit": "USD/MWh", "asOfDate": "2026-01-01", "source": "IEA", "dataNotes": "Global benchmark" },
+    "foodPriceUSDPer1000Kcal": { "value": 0.45, "unit": "USD/1000 kcal", "asOfDate": "2026-01-01", "source": "FAO", "dataNotes": "Grain index" },
+    "steelPriceUSDPerKg": { "value": 0.85, "unit": "USD/kg", "asOfDate": "2026-01-01", "source": "World Steel", "dataNotes": "HRC benchmark" },
+    "globalMedianUnskilledLaborWageUSDPerHour": { "value": 4.50, "unit": "USD/hour", "asOfDate": "2026-01-01", "source": "ILO", "dataNotes": "Global median" }
+  },
+  "countries": {
+    "IN": {
+      "countryName": "India",
+      "common": {
+        "exchangeRateLocalPerUSD": { "value": 83.5, "asOfDate": "2026-01-01", "source": "RBI", "dataNotes": null },
+        "exchangeRatePreviousLocalPerUSD": { "value": 83.2, "asOfDate": "2025-12-01", "source": "RBI", "dataNotes": null },
+        "exchangeRateChange": { "value": 0.0036, "asOfDate": "2026-01-01", "source": "Calculated", "dataNotes": null },
+        "PPP": { "value": 23.5, "asOfDate": "2025-01-01", "source": "World Bank", "dataNotes": null },
+        "CPICurrent": { "value": 185.4, "asOfDate": "2026-01-01", "source": "MOSPI", "dataNotes": null },
+        "CPIBase": { "value": 100.0, "asOfDate": "2012-01-01", "source": "MOSPI", "dataNotes": null },
+        "GDP_PPP": { "value": 14200.0, "asOfDate": "2025-01-01", "source": "IMF", "dataNotes": "Billion USD" },
+        "dataQualityScore": { "value": 0.85, "asOfDate": "2026-01-01", "source": "GP Engine", "dataNotes": null },
+        "logisticsPremium": { "value": 1.25, "asOfDate": "2026-01-01", "source": "World Bank LPI", "dataNotes": null }
+      },
+      "products": {
+        "mobile_phone": {
+          "taxRate": { "value": 0.18, "asOfDate": "2026-01-01", "source": "GST Council", "dataNotes": "HS 8517" },
+          "dutyRate": { "value": 0.20, "asOfDate": "2026-01-01", "source": "CBIC", "dataNotes": "Basic Customs Duty" },
+          "retailMargin": { "value": 0.15, "asOfDate": "2026-01-01", "source": "Industry Average", "dataNotes": null }
+        },
+        "laptop": {
+          "taxRate": { "value": 0.18, "asOfDate": "2026-01-01", "source": "GST Council", "dataNotes": "HS 8471" },
+          "dutyRate": { "value": 0.00, "asOfDate": "2026-01-01", "source": "CBIC", "dataNotes": "ITA-1 Zero Duty" },
+          "retailMargin": { "value": 0.12, "asOfDate": "2026-01-01", "source": "Industry Average", "dataNotes": null }
+        }
+      }
     }
   }
 }
 
-IMPORTANT REQUIREMENTS:
-1. Please include parameters for ALL 195 countries in TargetCountries using their 2-letter ISO codes:
-${allCountryCodes}
-2. If the product is NOT officially available, sold, or distributed in a particular country (e.g., region-locked, unsold, or restricted), set "IsAvailable": false and "KnownMarketPrice": null for that country. If available, set "IsAvailable": true.`;
+IMPORTANT: Please populate entries for ALL 195 country 2-letter codes:
+${allCountryCodes}`;
   };
 
   const handleCopyMasterPrompt = () => {

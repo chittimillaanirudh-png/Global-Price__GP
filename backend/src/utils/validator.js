@@ -23,6 +23,11 @@ export const validateGeminiParsedData = (data) => {
     return { isValid: false, missingKeys: ['Invalid JSON object'] };
   }
 
+  // Accept Master Economic Dataset schema (containing countries, gfrb, metadata or TargetCountries)
+  if (data.countries || data.metadata || data.gfrb || data.TargetCountries) {
+    return { isValid: true, missingKeys: [] };
+  }
+
   const requiredKeys = [
     'BaseRetailCost',
     'CountryTaxRate',
@@ -35,10 +40,6 @@ export const validateGeminiParsedData = (data) => {
   const missingKeys = requiredKeys.filter(
     (key) => typeof data[key] !== 'number' || isNaN(data[key])
   );
-
-  if (data.TargetCountries && typeof data.TargetCountries !== 'object') {
-    missingKeys.push('TargetCountries must be an object');
-  }
 
   return {
     isValid: missingKeys.length === 0,
