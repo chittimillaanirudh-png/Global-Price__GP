@@ -5,7 +5,8 @@ import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
 import { 
   Calculator, Info, Download, ArrowUpRight, ArrowDownRight, 
-  Check, Search, HelpCircle, AlertTriangle, ListFilter, ArrowUpDown, RefreshCw 
+  Check, Search, HelpCircle, AlertTriangle, ListFilter, ArrowUpDown, RefreshCw,
+  Sparkles, Loader2, ChevronDown, ChevronUp
 } from "lucide-react";
 
 import { CountryData, ProductCategory, ExchangeRates, GPResult, CountryPrediction, ToastMessage, ParsedData } from "../types";
@@ -19,6 +20,7 @@ import { calculateGPFromParsedData, parseChatGPTResponse, validateParsedData, pr
 import { fetchExchangeRates } from "../engine/fetchRates";
 import { fetchWorldBankPPP, fetchWorldBankCPI, fetchWorldBankGDP, fetchCommodityPrices, CommodityPrices } from "../engine/fetchWorldBank";
 import { GPCharts } from "../components/GPCharts";
+import { fetchGeminiDataFromBackend } from "../services/api";
 
 interface CalculatorProps {
   addToast: (type: 'success' | 'error' | 'warning', title: string, msg: string) => void;
@@ -50,6 +52,9 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
   const [geminiResponse, setGeminiResponse] = useState("");
   const [geminiError, setGeminiError] = useState("");
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
+  const [isAutomating, setIsAutomating] = useState(false);
+  const [showManualSection, setShowManualSection] = useState(false);
+  const [apiError, setApiError] = useState("");
 
   // --- UI Lifecycle States ---
   const [isCalculating, setIsCalculating] = useState(false);
@@ -180,6 +185,34 @@ ${allCountryCodes}
   const copyPrompt = () => {
     navigator.clipboard.writeText(generatePrompt());
     addToast("success", "Copied!", "Prompt copied to clipboard. Open Gemini AI to paste it.");
+  };
+
+  const handleAutomatedGeminiFetch = async () => {
+    setIsAutomating(true);
+    setApiError("");
+    setGeminiError("");
+
+    try {
+      const prompt = generatePrompt();
+      const data = await fetchGeminiDataFromBackend(prompt);
+
+      const { isValid, missingKeys } = validateParsedData(data);
+      if (!isValid) {
+        throw new Error(`Incomplete response data from Gemini API. Missing required keys: ${missingKeys.join(", ")}`);
+      }
+
+      setParsedData(data);
+      setIsCalculating(true);
+      setStep(4);
+      addToast("success", "Automated Fetch Complete", "Successfully fetched market parameters for 195 countries via Gemini API.");
+    } catch (err: any) {
+      console.error("Automated Gemini fetch error:", err);
+      const message = err.message || "Failed to automate Gemini calculation.";
+      setApiError(message);
+      addToast("error", "Automated AI Fetch Failed", message);
+    } finally {
+      setIsAutomating(false);
+    }
   };
 
   const handleGeminiParse = () => {
@@ -741,7 +774,7 @@ ${allCountryCodes}
           </motion.div>
         )}
 
-        {/* Step 2: Gemini AI Prompt Generation */}
+        {/* Step 2: Gemini AI Prompt Generation & Automated API Call */}
         {step === 2 && !isCalculating && !showResults && (
           <motion.div
             key="promptPanel"
@@ -753,7 +786,7 @@ ${allCountryCodes}
               <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
                 <div className="flex items-center gap-2">
                   <Calculator className="text-amber-400 w-5 h-5" />
-                  <h2 className="font-bebas text-lg tracking-widest text-white">STEP 2: GET VERIFIED DATA</h2>
+                  <h2 className="font-bebas text-lg tracking-widest text-white">STEP 2: GET VERIFIED MARKET DATA</h2>
                 </div>
                 <button 
                   onClick={() => setStep(1)}
@@ -764,43 +797,113 @@ ${allCountryCodes}
               </div>
 
               <p className="text-sm font-light text-white/70 leading-relaxed">
-                To calculate a highly accurate Global Price, we need to strip away local friction factors. 
-                Please copy the prompt below, paste it into Gemini AI, and bring back the resulting JSON block.
+                To calculate a highly accurate Global Price, our engine analyzes friction factors (taxes, duties, margins, purchasing power) across 195 countries using Gemini AI.
               </p>
 
+              {/* Primary Automated Action Button */}
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 to-amber-500/0 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
-                <textarea
-                  readOnly
-                  value={generatePrompt()}
-                  className="relative w-full h-48 p-4 rounded-xl bg-black border border-white/10 text-xs font-mono text-white/80 resize-none outline-none focus:border-amber-500/50"
-                />
+                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/30 to-amber-500/10 rounded-2xl blur opacity-30 group-hover:opacity-75 transition duration-500" />
+                <button
+                  onClick={handleAutomatedGeminiFetch}
+                  disabled={isAutomating}
+                  className="relative w-full h-16 rounded-xl font-bebas text-xl tracking-[0.15em] liquid-glass bg-amber-500/20 border border-amber-500/40 hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] text-white cursor-pointer flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAutomating ? (
+                    <>
+                      <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
+                      FETCHING DATA VIA GEMINI AI...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
+                      AUTOMATICALLY FETCH & CALCULATE WITH GEMINI AI
+                    </>
+                  )}
+                </button>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
-                <button
-                  onClick={copyPrompt}
-                  className="w-full sm:w-1/2 h-14 rounded-xl font-bebas text-lg tracking-[0.15em] bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/10 text-white transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Check className="w-5 h-5" /> COPY PROMPT
-                </button>
-                <a
-                  href="https://gemini.google.com/app?hl=en-IN"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-1/2 h-14 rounded-xl font-bebas text-lg tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <ArrowUpRight className="w-5 h-5 text-amber-400" /> OPEN GEMINI AI
-                </a>
-              </div>
+              <p className="text-[11px] text-center text-white/40 font-mono">
+                🔒 Secure backend integration with Google GenAI SDK. API Key remains server-side.
+              </p>
 
-              <div className="pt-4 mt-4 border-t border-white/5 text-center">
+              {/* Error Display */}
+              {apiError && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-3">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-red-400 text-sm">Backend / Gemini Error</h4>
+                      <p className="text-xs text-red-200/80 mt-1">{apiError}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2 border-t border-red-500/20">
+                    <button
+                      onClick={handleAutomatedGeminiFetch}
+                      className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-xs font-geist text-red-200 cursor-pointer transition-colors"
+                    >
+                      Retry Automated Fetch
+                    </button>
+                    <button
+                      onClick={() => setShowManualSection(true)}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-geist text-white/70 cursor-pointer transition-colors"
+                    >
+                      Use Manual Copy/Paste
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Backup Accordion */}
+              <div className="pt-4 border-t border-white/5">
                 <button
-                  onClick={() => setStep(3)}
-                  className="text-xs text-amber-400 hover:text-amber-300 font-geist tracking-wide uppercase cursor-pointer"
+                  onClick={() => setShowManualSection(!showManualSection)}
+                  className="w-full flex items-center justify-between text-xs text-amber-400/80 hover:text-amber-300 font-geist tracking-wide uppercase cursor-pointer py-1"
                 >
-                  I have the data, proceed to paste →
+                  <span>Manual Copy / Paste Option (Backup)</span>
+                  {showManualSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
+
+                {showManualSection && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mt-4 space-y-4"
+                  >
+                    <div className="relative group">
+                      <textarea
+                        readOnly
+                        value={generatePrompt()}
+                        className="w-full h-44 p-4 rounded-xl bg-black border border-white/10 text-xs font-mono text-white/80 resize-none outline-none focus:border-amber-500/50"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <button
+                        onClick={copyPrompt}
+                        className="w-full sm:w-1/2 h-12 rounded-xl font-bebas text-base tracking-[0.15em] bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/10 text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <Check className="w-4 h-4" /> COPY PROMPT
+                      </button>
+                      <a
+                        href="https://gemini.google.com/app?hl=en-IN"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full sm:w-1/2 h-12 rounded-xl font-bebas text-base tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/25 hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] text-white cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <ArrowUpRight className="w-4 h-4 text-amber-400" /> OPEN GEMINI AI
+                      </a>
+                    </div>
+
+                    <div className="pt-2 text-center">
+                      <button
+                        onClick={() => setStep(3)}
+                        className="text-xs text-amber-400 hover:text-amber-300 font-geist tracking-wide uppercase cursor-pointer"
+                      >
+                        I have the data, proceed to paste manually →
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </div>
           </motion.div>
