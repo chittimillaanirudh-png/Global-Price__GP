@@ -12,7 +12,7 @@ interface NavigationProps {
 const NAV_LINKS = [
   { id: "home", label: "Home", desc: "The Universal Value Standard overview", icon: Home },
   { id: "calculator", label: "Calculator", desc: "Formulate product valuations", icon: Calculator },
-  { id: "gp-explained", label: "GP Explained", desc: "Interactive hackathon presentation guide", icon: Sparkles },
+  { id: "gp-explained", label: "GP Explanation", desc: "Interactive hackathon presentation guide", icon: Sparkles },
   { id: "how-it-works", label: "How It Works", desc: "The physical basket mathematics", icon: HelpCircle },
   { id: "about", label: "About", desc: "The metrological SI metric vision", icon: Info }
 ];
@@ -43,7 +43,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </button>
 
         {/* Center: Desktop Nav Links */}
-        <div className="hidden md:flex items-center gap-10">
+        <div className="hidden md:flex items-center gap-8 lg:gap-10">
           {NAV_LINKS.map((link) => {
             const isActive = currentPage === link.id;
             return (
@@ -51,7 +51,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 key={link.id}
                 onClick={() => handleLinkClick(link.id)}
                 className={`relative font-geist text-xs font-light uppercase tracking-[0.2em] transition-colors py-2 cursor-pointer ${
-                  isActive ? "text-white" : "text-white/60 hover:text-white"
+                  isActive ? "text-white font-semibold" : "text-white/60 hover:text-white"
                 }`}
               >
                 {link.label}
@@ -69,6 +69,13 @@ export const Navigation: React.FC<NavigationProps> = ({
 
         {/* Right: CTA & Admin Buttons */}
         <div className="hidden md:flex items-center gap-3">
+          <button
+            onClick={() => handleLinkClick("gp-explained")}
+            className="liquid-glass rounded-full px-5 py-2 font-bebas text-xs text-amber-300 tracking-[0.15em] bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 hover:border-amber-400 transition-all cursor-pointer font-bold flex items-center gap-1.5 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> GP EXPLANATION
+          </button>
+
           {onOpenAdmin && (
             <button
               onClick={onOpenAdmin}
@@ -79,9 +86,9 @@ export const Navigation: React.FC<NavigationProps> = ({
           )}
           <button
             onClick={() => handleLinkClick("calculator")}
-            className="liquid-glass rounded-full px-6 py-2.5 font-bebas text-xs text-white tracking-[0.15em] border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all cursor-pointer font-medium"
+            className="liquid-glass rounded-full px-5 py-2 font-bebas text-xs text-white tracking-[0.15em] border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all cursor-pointer font-medium"
           >
-            TRY CALCULATOR
+            CALCULATOR
           </button>
         </div>
 
@@ -141,19 +148,16 @@ export const Navigation: React.FC<NavigationProps> = ({
                       onClick={() => handleLinkClick(link.id)}
                       className={`group w-full flex items-center gap-4 px-5 py-4 rounded-r-3xl transition-all text-left cursor-pointer focus:outline-none relative overflow-hidden ${
                         isActive 
-                          ? "bg-gradient-to-r from-white/10 to-transparent text-white" 
+                          ? "bg-gradient-to-r from-amber-500/20 to-transparent text-amber-300 font-semibold" 
                           : "bg-transparent text-white/50 hover:text-white"
                       }`}
                     >
                       {/* Active indicator bar on the left */}
                       {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] rounded-r-full" />
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.8)] rounded-r-full" />
                       )}
                       
-                      {/* Active curved left border on the item wrapper itself if we want to follow the image exactly. 
-                          The image has a white glowing left border, and a slight rounded box look. */}
-                      
-                      <LinkIcon className={`w-4 h-4 shrink-0 transition-transform duration-300 ${isActive ? "text-white scale-110" : "text-white/40 group-hover:text-white/70"}`} />
+                      <LinkIcon className={`w-4 h-4 shrink-0 transition-transform duration-300 ${isActive ? "text-amber-400 scale-110" : "text-white/40 group-hover:text-white/70"}`} />
                       <span className="font-geist text-xs tracking-[0.2em] uppercase font-medium">
                         {link.label}
                       </span>
@@ -162,8 +166,15 @@ export const Navigation: React.FC<NavigationProps> = ({
                 })}
               </div>
 
-              {/* Primary Action Button inside Mobile menu */}
+              {/* Primary Action Buttons inside Mobile menu */}
               <div className="mt-auto pt-6 border-t border-white/5 space-y-3">
+                <button
+                  onClick={() => handleLinkClick("gp-explained")}
+                  className="w-full text-center py-4 font-bebas tracking-[0.2em] text-xs text-amber-300 bg-amber-500/20 border border-amber-500/50 rounded-xl hover:bg-amber-500/30 transition-all cursor-pointer font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" /> PRESENTATION: GP EXPLANATION
+                </button>
+
                 {onOpenAdmin && (
                   <button
                     onClick={() => {

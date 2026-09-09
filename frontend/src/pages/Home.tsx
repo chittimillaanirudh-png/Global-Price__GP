@@ -2,7 +2,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { StaggeredFade } from "../components/StaggeredFade";
-import { Ruler, Globe, TrendingUp, ArrowRight, Shield, RefreshCw, Layers } from "lucide-react";
+import { Ruler, Globe, TrendingUp, ArrowRight, Shield, RefreshCw, Layers, Sparkles } from "lucide-react";
 
 interface HomeProps {
   onNavigate: (page: string) => void;
@@ -67,15 +67,21 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
               className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4 w-full sm:w-auto"
             >
               <button
+                onClick={() => onNavigate("gp-explained")}
+                className="cursor-pointer px-6 py-4 rounded-xl border border-amber-500/50 bg-amber-500/20 hover:bg-amber-500/30 hover:border-amber-400 transition-all text-amber-300 tracking-[0.15em] text-xs font-sans uppercase font-bold flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(245,158,11,0.3)]"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" /> GP EXPLANATION
+              </button>
+              <button
                 onClick={() => onNavigate("calculator")}
-                className="relative group cursor-pointer rounded-xl px-8 py-4 bg-white/2 border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-2.5 tracking-[0.15em] text-xs text-white font-sans uppercase font-semibold overflow-hidden"
+                className="relative group cursor-pointer rounded-xl px-6 py-4 bg-white/2 border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-2.5 tracking-[0.15em] text-xs text-white font-sans uppercase font-semibold overflow-hidden"
               >
                 CALCULATE NOW
                 <span className="text-white/60 group-hover:translate-x-1 transition-transform">→</span>
               </button>
               <button
                 onClick={() => onNavigate("how-it-works")}
-                className="cursor-pointer px-8 py-4 rounded-xl border border-white/5 hover:border-white/15 hover:bg-white/3 transition-all text-white/60 hover:text-white tracking-[0.15em] text-xs font-sans uppercase font-medium flex items-center justify-center"
+                className="cursor-pointer px-6 py-4 rounded-xl border border-white/5 hover:border-white/15 hover:bg-white/3 transition-all text-white/60 hover:text-white tracking-[0.15em] text-xs font-sans uppercase font-medium flex items-center justify-center"
               >
                 HOW IT WORKS
               </button>

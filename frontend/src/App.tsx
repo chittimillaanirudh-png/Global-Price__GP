@@ -107,6 +107,7 @@ export default function App() {
       case "how-it-works":
         return <HowItWorks />;
       case "gp-explained":
+      case "gp-explanation":
         return <GPExplanation onNavigate={navigateTo} />;
       case "about":
         return <About />;
