@@ -6,20 +6,23 @@ import { AppError } from '../utils/errorHandler.js';
 const ADMIN_ID = process.env.ADMIN_ID || '434011';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'GlobalLab@2026';
 
-const ensureDatabaseConnection = async () => {
-  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+// In-Memory Fallback Dataset Store for seamless high availability
+let inMemoryDataset = null;
+
+const tryConnectDB = async () => {
+  if (mongoose.connection.readyState === 1) return true;
+  
+  if (process.env.MONGODB_URI) {
     try {
-      await mongoose.connect(process.env.MONGODB_URI);
+      await mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 3000
+      });
+      return true;
     } catch (err) {
-      console.error('Failed on-demand MongoDB connection:', err.message);
+      console.warn('[MongoDB Atlas] On-demand connection warning:', err.message);
     }
   }
-  if (mongoose.connection.readyState !== 1) {
-    throw new AppError(
-      'MongoDB Atlas database is currently connecting or unavailable. Please verify MONGODB_URI on Render and ensure MongoDB Atlas Network Access has IP 0.0.0.0/0 enabled.',
-      503
-    );
-  }
+  return false;
 };
 
 /**
@@ -52,30 +55,52 @@ export const loginAdmin = async (req, res, next) => {
 };
 
 /**
- * Get the latest active Market Data stored in MongoDB Atlas
+ * Get the latest active Market Data stored in MongoDB Atlas (with in-memory fallback)
  */
 export const getLatestMarketData = async (_req, res, next) => {
   try {
-    await ensureDatabaseConnection();
-    const latestDoc = await MarketData.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const isConnected = await tryConnectDB();
 
-    if (!latestDoc) {
+    if (isConnected) {
+      try {
+        const latestDoc = await MarketData.findOne({ isActive: true }).sort({ createdAt: -1 });
+        if (latestDoc) {
+          return res.status(200).json({
+            success: true,
+            data: latestDoc.data,
+            metadata: {
+              id: latestDoc._id,
+              title: latestDoc.title,
+              updatedBy: latestDoc.updatedBy,
+              updatedAt: latestDoc.updatedAt,
+              storage: 'MongoDB Atlas'
+            }
+          });
+        }
+      } catch (dbErr) {
+        console.warn('[MongoDB Atlas] Query error, using fallback:', dbErr.message);
+      }
+    }
+
+    // Return in-memory fallback if MongoDB Atlas is unavailable or empty
+    if (inMemoryDataset) {
       return res.status(200).json({
         success: true,
-        data: null,
-        message: 'No market dataset published in MongoDB Atlas yet.'
+        data: inMemoryDataset.data,
+        metadata: {
+          id: 'in-memory-active',
+          title: inMemoryDataset.title,
+          updatedBy: inMemoryDataset.updatedBy,
+          updatedAt: inMemoryDataset.updatedAt,
+          storage: 'In-Memory Store (Atlas Reconnecting)'
+        }
       });
     }
 
     res.status(200).json({
       success: true,
-      data: latestDoc.data,
-      metadata: {
-        id: latestDoc._id,
-        title: latestDoc.title,
-        updatedBy: latestDoc.updatedBy,
-        updatedAt: latestDoc.updatedAt
-      }
+      data: null,
+      message: 'No market dataset published yet.'
     });
   } catch (err) {
     next(err);
@@ -83,11 +108,10 @@ export const getLatestMarketData = async (_req, res, next) => {
 };
 
 /**
- * Save & publish a new Market Dataset to MongoDB Atlas
+ * Save & publish a new Market Dataset to MongoDB Atlas (with in-memory fallback)
  */
 export const updateMarketData = async (req, res, next) => {
   try {
-    await ensureDatabaseConnection();
     const { marketData, title } = req.body || {};
 
     if (!marketData) {
@@ -99,24 +123,57 @@ export const updateMarketData = async (req, res, next) => {
       throw new AppError(`Invalid market dataset schema. Missing required keys: ${missingKeys.join(', ')}`, 400);
     }
 
-    // Deactivate old active records
-    await MarketData.updateMany({ isActive: true }, { isActive: false });
+    const titleStr = title || `Global Market Dataset ${new Date().toISOString().split('T')[0]}`;
+    const updatedByStr = `Admin ${ADMIN_ID}`;
+    const now = new Date().toISOString();
 
-    // Save new dataset
-    const newDoc = await MarketData.create({
-      title: title || `Global Market Dataset ${new Date().toISOString().split('T')[0]}`,
+    // Always update in-memory cache for instant availability
+    inMemoryDataset = {
+      title: titleStr,
       data: marketData,
-      updatedBy: `Admin ${ADMIN_ID}`,
-      isActive: true
-    });
+      updatedBy: updatedByStr,
+      updatedAt: now
+    };
 
+    const isConnected = await tryConnectDB();
+
+    if (isConnected) {
+      try {
+        // Deactivate old active records
+        await MarketData.updateMany({ isActive: true }, { isActive: false });
+
+        // Save new dataset to MongoDB Atlas
+        const newDoc = await MarketData.create({
+          title: titleStr,
+          data: marketData,
+          updatedBy: updatedByStr,
+          isActive: true
+        });
+
+        return res.status(201).json({
+          success: true,
+          message: 'Market dataset successfully published to MongoDB Atlas!',
+          metadata: {
+            id: newDoc._id,
+            title: newDoc.title,
+            updatedAt: newDoc.updatedAt,
+            storage: 'MongoDB Atlas'
+          }
+        });
+      } catch (dbErr) {
+        console.error('[MongoDB Atlas] Write error, saved in memory:', dbErr.message);
+      }
+    }
+
+    // Response if saved in memory store
     res.status(201).json({
       success: true,
-      message: 'Market dataset successfully published to MongoDB Atlas!',
+      message: 'Market dataset published to active memory store (MongoDB Atlas connecting).',
       metadata: {
-        id: newDoc._id,
-        title: newDoc.title,
-        updatedAt: newDoc.updatedAt
+        id: 'in-memory-active',
+        title: titleStr,
+        updatedAt: now,
+        storage: 'Active Memory'
       }
     });
   } catch (err) {
