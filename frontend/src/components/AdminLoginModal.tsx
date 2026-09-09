@@ -92,7 +92,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   type="text"
                   value={adminId}
                   onChange={(e) => setAdminId(e.target.value)}
-                  placeholder="e.g. 434011"
+                  placeholder="e.g. 123456"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-mono text-white focus:border-amber-500/50 outline-none transition-colors"
                 />
               </div>
