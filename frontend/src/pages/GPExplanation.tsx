@@ -90,7 +90,7 @@ export const GPExplanation: React.FC<GPExplanationProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="relative z-10 w-full text-white bg-transparent min-h-screen font-sans pb-24">
+    <div className="relative z-20 w-full text-white bg-[#030303] min-h-screen font-sans pb-24">
       {/* ─────────────────────────────────────────────────────────────
           STORYTELLING PRESENTATION HEADER / HERO
       ───────────────────────────────────────────────────────────── */}
