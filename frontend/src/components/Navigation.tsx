@@ -1,7 +1,7 @@
 // src/components/Navigation.tsx
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X, Home, Calculator, HelpCircle, Info, ArrowRight, Shield } from "lucide-react";
+import { Menu, X, Home, Calculator, HelpCircle, Info, ArrowRight, Shield, Sparkles } from "lucide-react";
 
 interface NavigationProps {
   currentPage: string;
@@ -12,6 +12,7 @@ interface NavigationProps {
 const NAV_LINKS = [
   { id: "home", label: "Home", desc: "The Universal Value Standard overview", icon: Home },
   { id: "calculator", label: "Calculator", desc: "Formulate product valuations", icon: Calculator },
+  { id: "gp-explained", label: "GP Explained", desc: "Interactive hackathon presentation guide", icon: Sparkles },
   { id: "how-it-works", label: "How It Works", desc: "The physical basket mathematics", icon: HelpCircle },
   { id: "about", label: "About", desc: "The metrological SI metric vision", icon: Info }
 ];

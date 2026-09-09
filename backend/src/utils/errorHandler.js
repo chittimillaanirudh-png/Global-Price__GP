@@ -12,7 +12,7 @@ export class AppError extends Error {
   }
 }
 
-export const errorHandlerMiddleware = (err, req, res, _next) => {
+export const errorHandler = (err, req, res, _next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || 'An unexpected internal server error occurred.';
   

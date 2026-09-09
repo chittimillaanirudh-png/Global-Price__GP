@@ -14,6 +14,7 @@ import Home from "./pages/Home";
 import CalculatorPage from "./pages/Calculator";
 import HowItWorks from "./pages/HowItWorks";
 import About from "./pages/About";
+import GPExplanation from "./pages/GPExplanation";
 import { AdminLoginModal } from "./components/AdminLoginModal";
 import { AdminPanelModal } from "./components/AdminPanelModal";
 
@@ -57,6 +58,7 @@ export default function App() {
     if (!pageId) return "";
     if (pageId === "home") return "HOME";
     if (pageId === "how-it-works") return "METHODOLOGY";
+    if (pageId === "gp-explained") return "GP EXPLAINED";
     return pageId.replace("-", " ").toUpperCase();
   };
 
@@ -104,6 +106,8 @@ export default function App() {
         );
       case "how-it-works":
         return <HowItWorks />;
+      case "gp-explained":
+        return <GPExplanation onNavigate={navigateTo} />;
       case "about":
         return <About />;
       default:
