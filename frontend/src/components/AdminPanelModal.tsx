@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, Database, RefreshCw, Save, X, Sparkles, Check, 
-  AlertTriangle, Clock, Layers, Globe 
+  AlertTriangle, Clock, Layers, Globe, Copy, ArrowUpRight, Terminal
 } from 'lucide-react';
 import { ParsedData } from '../types';
+import { COUNTRIES } from '../data/countries';
 import { fetchLatestMarketDataFromDB, saveMarketDataToDB, fetchGeminiDataFromBackend } from '../services/api';
 
 interface AdminPanelModalProps {
@@ -33,6 +34,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editorError, setEditorError] = useState('');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   // Load current dataset on open
   useEffect(() => {
@@ -61,18 +63,60 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Master Prompt Generator for all 195 countries
+  const getMasterAdminPrompt = () => {
+    const allCountryCodes = COUNTRIES.map(c => c.code).join(", ");
+    return `Please act as a global trade economist. I am analyzing a reference global product basket to calibrate market friction factors (theta) and purchasing power adjustments across 195 countries.
+
+Please provide the following data for all 195 countries in a strict JSON format EXACTLY like this (do not include markdown formatting or extra text, just raw JSON):
+{
+  "BaseRetailCost": 1000,
+  "CountryTaxRate": 0.10,
+  "CountryDutyRate": 0.05,
+  "LogisticsPremium": 1.05,
+  "RetailMargin": 0.15,
+  "GlobalPurchasingPower": 1.00,
+  "ExchangeRate": 1.00,
+  "CPICurrent": 100,
+  "CPIBase": 100,
+  "KnownMarketPrice": 1000,
+  "TargetCountries": {
+    "<Country Code>": {
+      "IsAvailable": true,
+      "CountryTaxRate": 0.10,
+      "CountryDutyRate": 0.05,
+      "LogisticsPremium": 1.05,
+      "RetailMargin": 0.15,
+      "ExchangeRate": 1.00,
+      "CPICurrent": 100,
+      "CPIBase": 100,
+      "KnownMarketPrice": 1000
+    }
+  }
+}
+
+IMPORTANT REQUIREMENTS:
+1. Please include parameters for ALL 195 countries in TargetCountries using their 2-letter ISO codes:
+${allCountryCodes}
+2. If the product is NOT officially available, sold, or distributed in a particular country (e.g., region-locked, unsold, or restricted), set "IsAvailable": false and "KnownMarketPrice": null for that country. If available, set "IsAvailable": true.`;
+  };
+
+  const handleCopyMasterPrompt = () => {
+    navigator.clipboard.writeText(getMasterAdminPrompt());
+    setCopiedPrompt(true);
+    addToast('success', 'Master Prompt Copied!', 'Master 195-country Gemini prompt copied to clipboard.');
+    setTimeout(() => setCopiedPrompt(false), 3000);
+  };
+
   // Handler to generate fresh data via backend Gemini API
   const handleGenerateFreshData = async () => {
     setIsGenerating(true);
     setEditorError('');
     try {
-      const samplePrompt = `Please act as a global trade economist. I am analyzing the product "Global Market Reference Basket" (Category: Electronics). The local retail price is 1000 USD.
-Please provide parameters for all 195 countries in strict JSON format: BaseRetailCost, CountryTaxRate, CountryDutyRate, LogisticsPremium, RetailMargin, GlobalPurchasingPower, and TargetCountries for all 195 country codes.`;
-      
-      const freshData = await fetchGeminiDataFromBackend(samplePrompt);
+      const prompt = getMasterAdminPrompt();
+      const freshData = await fetchGeminiDataFromBackend(prompt);
       setJsonInput(JSON.stringify(freshData, null, 2));
       addToast('success', 'AI Generation Complete', 'Generated fresh 195-country market parameters via Gemini AI.');
-      setActiveTab('editor');
     } catch (err: any) {
       setEditorError(err.message || 'Failed to generate data via Gemini AI.');
       addToast('error', 'AI Generation Failed', err.message || 'Could not fetch fresh data.');
@@ -258,20 +302,67 @@ Please provide parameters for all 195 countries in strict JSON format: BaseRetai
           {/* TAB 2: UPDATE / PUBLISH NEW DATASET */}
           {activeTab === 'editor' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <p className="text-xs font-geist text-white/80 leading-relaxed">
-                  Generate fresh parameters via Gemini AI or manually paste updated JSON metrics. Publishing saves the dataset to MongoDB Atlas for all users.
+              {/* SECTION 1: MASTER GEMINI PROMPT */}
+              <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-amber-400" />
+                    <h3 className="font-bebas text-lg tracking-widest text-white">MASTER 195-COUNTRY GEMINI PROMPT</h3>
+                  </div>
+                  <span className="text-[11px] font-mono text-amber-400/80">
+                    Includes 195 Country Codes
+                  </span>
+                </div>
+
+                <p className="text-xs font-geist text-white/70 leading-relaxed">
+                  Copy this master prompt to query Gemini AI directly for real-time market parameters ($θ$, tax, duty, logistics, margins, PPP) across all 195 countries, then paste the resulting JSON output below.
                 </p>
-                <button
-                  onClick={handleGenerateFreshData}
-                  disabled={isGenerating}
-                  className="px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400 font-bebas text-sm tracking-wider flex items-center gap-2 cursor-pointer shrink-0 transition-all disabled:opacity-50"
-                >
-                  <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                  {isGenerating ? 'GENERATING VIA AI...' : 'GENERATE FRESH DATA VIA GEMINI AI'}
-                </button>
+
+                {/* Readonly Master Prompt Box */}
+                <textarea
+                  readOnly
+                  value={getMasterAdminPrompt()}
+                  className="w-full h-44 p-4 rounded-xl bg-black border border-white/10 text-xs font-mono text-white/80 resize-none outline-none focus:border-amber-500/50 select-text cursor-text"
+                />
+
+                {/* Prompt Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <button
+                    onClick={handleCopyMasterPrompt}
+                    className="w-full sm:w-1/3 h-12 rounded-xl font-bebas text-base tracking-[0.15em] bg-amber-500/20 border border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/30 text-white flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    {copiedPrompt ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-400" /> COPIED TO CLIPBOARD!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 text-amber-400" /> COPY MASTER PROMPT
+                      </>
+                    )}
+                  </button>
+
+                  <a
+                    href="https://gemini.google.com/app?hl=en-IN"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-1/3 h-12 rounded-xl font-bebas text-base tracking-[0.15em] bg-white/5 border border-white/10 hover:border-amber-500/40 hover:bg-white/10 text-white flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <ArrowUpRight className="w-4 h-4 text-amber-400" /> OPEN GEMINI AI WEB
+                  </a>
+
+                  <button
+                    onClick={handleGenerateFreshData}
+                    disabled={isGenerating}
+                    className="w-full sm:w-1/3 h-12 rounded-xl font-bebas text-base tracking-[0.15em] liquid-glass bg-amber-500/15 border border-amber-500/30 hover:border-amber-400 text-white flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    <Sparkles className={`w-4 h-4 text-amber-400 ${isGenerating ? 'animate-spin' : ''}`} />
+                    {isGenerating ? 'GENERATING VIA AI...' : 'RUN VIA BACKEND API'}
+                  </button>
+                </div>
               </div>
 
+              {/* Error Display */}
               {editorError && (
                 <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
@@ -279,30 +370,31 @@ Please provide parameters for all 195 countries in strict JSON format: BaseRetai
                 </div>
               )}
 
-              {/* Title input */}
-              <div>
-                <label className="block text-xs font-mono text-white/50 mb-1">DATASET TITLE / NOTE (OPTIONAL)</label>
-                <input
-                  type="text"
-                  value={customTitle}
-                  onChange={(e) => setCustomTitle(e.target.value)}
-                  placeholder="e.g., Daily Electronics Market Feed - Sept 2026"
-                  className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-geist text-white outline-none focus:border-amber-500/50 select-text cursor-text"
-                />
+              {/* SECTION 2: PASTE OR EDIT MARKET JSON */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-mono text-white/50 mb-1">DATASET TITLE / NOTE (OPTIONAL)</label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    placeholder="e.g., Daily Global Market Feed - Sept 2026"
+                    className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-sm font-geist text-white outline-none focus:border-amber-500/50 select-text cursor-text"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-white/50 mb-1">JSON MARKET DATASET (PASTE GEMINI AI OUTPUT HERE)</label>
+                  <textarea
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                    placeholder="{\n  &quot;BaseRetailCost&quot;: 1000,\n  ...\n}"
+                    className="w-full h-64 p-4 rounded-xl bg-black/80 border border-white/10 text-xs font-mono text-amber-400 focus:border-amber-500/50 outline-none transition-colors select-text cursor-text"
+                  />
+                </div>
               </div>
 
-              {/* JSON Editor textarea */}
-              <div>
-                <label className="block text-xs font-mono text-white/50 mb-1">JSON MARKET DATASET</label>
-                <textarea
-                  value={jsonInput}
-                  onChange={(e) => setJsonInput(e.target.value)}
-                  placeholder="{\n  &quot;BaseRetailCost&quot;: 1000,\n  ...\n}"
-                  className="w-full h-64 p-4 rounded-xl bg-black/80 border border-white/10 text-xs font-mono text-amber-400 focus:border-amber-500/50 outline-none transition-colors select-text cursor-text"
-                />
-              </div>
-
-              {/* Submit Button */}
+              {/* SECTION 3: PUBLISH TO MONGODB ATLAS */}
               <button
                 onClick={handleSaveToMongoDB}
                 disabled={isSaving}
