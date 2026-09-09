@@ -1,6 +1,20 @@
 import { ParsedData } from '../types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+
+  // If VITE_API_URL is explicitly configured to a remote server, use it
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  // In production browser environment (e.g. deployed on Vercel), fall back to live Render backend
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://global-price-gp.onrender.com';
+  }
+
+  return (envUrl || 'http://localhost:5000').replace(/\/$/, '');
+};
 
 export interface GeminiApiResponse {
   success: boolean;
@@ -14,7 +28,8 @@ export interface GeminiApiResponse {
  * Sends prompt to the secure backend API endpoint POST /api/gemini/generate
  */
 export const fetchGeminiDataFromBackend = async (prompt: string): Promise<ParsedData> => {
-  const endpoint = `${API_BASE_URL}/api/gemini/generate`;
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/api/gemini/generate`;
 
   let response: Response;
   try {
@@ -28,7 +43,7 @@ export const fetchGeminiDataFromBackend = async (prompt: string): Promise<Parsed
   } catch (err: any) {
     console.error('Backend Network Error:', err);
     throw new Error(
-      `Cannot connect to backend server at ${API_BASE_URL}. Please check if the backend service is running.`
+      `Cannot connect to backend server at ${baseUrl}. Please ensure your backend is online.`
     );
   }
 
