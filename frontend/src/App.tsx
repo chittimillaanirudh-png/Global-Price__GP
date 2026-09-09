@@ -14,7 +14,8 @@ import Home from "./pages/Home";
 import CalculatorPage from "./pages/Calculator";
 import HowItWorks from "./pages/HowItWorks";
 import About from "./pages/About";
-import { ToastMessage } from "./types";
+import { AdminLoginModal } from "./components/AdminLoginModal";
+import { AdminPanelModal } from "./components/AdminPanelModal";
 
 export default function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -23,6 +24,12 @@ export default function App() {
   const [isPageLoading, setIsPageLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [apiOffline, setApiOffline] = useState(false);
+  
+  // Admin State
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [adminToken, setAdminToken] = useState("");
+  const [adminId, setAdminId] = useState("");
   
   // Check if splash was already viewed in this tab session
   useEffect(() => {
@@ -68,6 +75,21 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleOpenAdmin = () => {
+    if (adminToken) {
+      setIsAdminPanelOpen(true);
+    } else {
+      setIsAdminLoginOpen(true);
+    }
+  };
+
+  const handleAdminLoginSuccess = (token: string, id: string) => {
+    setAdminToken(token);
+    setAdminId(id);
+    setIsAdminPanelOpen(true);
+    addToast("success", "Admin Access Granted", `Welcome back, Admin ${id}. Database controls active.`);
+  };
+
   // Render the currently selected page
   const renderPage = () => {
     switch (currentPage) {
@@ -104,6 +126,22 @@ export default function App() {
         targetPageName={getPageDisplayName(targetPage)}
       />
 
+      {/* Admin Auth Modal */}
+      <AdminLoginModal
+        isOpen={isAdminLoginOpen}
+        onClose={() => setIsAdminLoginOpen(false)}
+        onLoginSuccess={handleAdminLoginSuccess}
+      />
+
+      {/* Admin Panel Modal */}
+      <AdminPanelModal
+        isOpen={isAdminPanelOpen}
+        onClose={() => setIsAdminPanelOpen(false)}
+        adminToken={adminToken}
+        adminId={adminId}
+        addToast={addToast}
+      />
+
       <AnimatePresence mode="wait">
         {!hasLoaded ? (
           <SplashScreen key="splash" onComplete={() => setHasLoaded(true)} />
@@ -119,6 +157,7 @@ export default function App() {
             <Navigation 
               currentPage={currentPage} 
               onPageChange={navigateTo} 
+              onOpenAdmin={handleOpenAdmin}
             />
 
             {/* Cinematic Page Slider-Transition container */}

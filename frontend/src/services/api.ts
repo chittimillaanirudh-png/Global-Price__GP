@@ -1,6 +1,6 @@
 import { ParsedData } from '../types';
 
-const getApiBaseUrl = (): string => {
+export const getApiBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_URL;
 
   // If VITE_API_URL is explicitly configured to a remote server, use it
@@ -22,6 +22,27 @@ export interface GeminiApiResponse {
   error?: string;
   details?: any;
   disclaimer?: string;
+}
+
+export interface AdminLoginResponse {
+  success: boolean;
+  message?: string;
+  token?: string;
+  adminId?: string;
+  error?: string;
+}
+
+export interface MarketDataResponse {
+  success: boolean;
+  data?: ParsedData | null;
+  metadata?: {
+    id?: string;
+    title?: string;
+    updatedBy?: string;
+    updatedAt?: string;
+  };
+  message?: string;
+  error?: string;
 }
 
 /**
@@ -58,4 +79,77 @@ export const fetchGeminiDataFromBackend = async (prompt: string): Promise<Parsed
   }
 
   return result.data;
+};
+
+/**
+ * Admin Login API call
+ */
+export const loginAdmin = async (adminId: string, password: string): Promise<AdminLoginResponse> => {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/api/admin/login`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminId, password }),
+  });
+
+  const result = await response.json().catch(() => ({
+    success: false,
+    error: 'Failed to parse admin login response.',
+  }));
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Admin authentication failed.');
+  }
+
+  return result;
+};
+
+/**
+ * Fetch latest active Market Dataset stored in MongoDB Atlas
+ */
+export const fetchLatestMarketDataFromDB = async (): Promise<MarketDataResponse> => {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/api/admin/market-data`;
+
+  const response = await fetch(endpoint);
+  const result = await response.json().catch(() => ({
+    success: false,
+    error: 'Failed to fetch market dataset from database.',
+  }));
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Could not retrieve market data.');
+  }
+
+  return result;
+};
+
+/**
+ * Save & Publish a new Market Dataset to MongoDB Atlas
+ */
+export const saveMarketDataToDB = async (marketData: ParsedData, token: string, title?: string): Promise<MarketDataResponse> => {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/api/admin/market-data`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ marketData, title }),
+  });
+
+  const result = await response.json().catch(() => ({
+    success: false,
+    error: 'Failed to save market dataset to database.',
+  }));
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to publish market data to MongoDB Atlas.');
+  }
+
+  return result;
 };

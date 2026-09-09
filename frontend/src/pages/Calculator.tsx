@@ -6,7 +6,7 @@ import { toPng } from "html-to-image";
 import { 
   Calculator, Info, Download, ArrowUpRight, ArrowDownRight, 
   Check, Search, HelpCircle, AlertTriangle, ListFilter, ArrowUpDown, RefreshCw,
-  Sparkles, Loader2, ChevronDown, ChevronUp
+  Sparkles, Loader2, ChevronDown, ChevronUp, Database
 } from "lucide-react";
 
 import { CountryData, ProductCategory, ExchangeRates, GPResult, CountryPrediction, ToastMessage, ParsedData } from "../types";
@@ -20,7 +20,7 @@ import { calculateGPFromParsedData, parseChatGPTResponse, validateParsedData, pr
 import { fetchExchangeRates } from "../engine/fetchRates";
 import { fetchWorldBankPPP, fetchWorldBankCPI, fetchWorldBankGDP, fetchCommodityPrices, CommodityPrices } from "../engine/fetchWorldBank";
 import { GPCharts } from "../components/GPCharts";
-import { fetchGeminiDataFromBackend } from "../services/api";
+import { fetchGeminiDataFromBackend, fetchLatestMarketDataFromDB } from "../services/api";
 
 interface CalculatorProps {
   addToast: (type: 'success' | 'error' | 'warning', title: string, msg: string) => void;
@@ -55,6 +55,25 @@ export const CalculatorPage: React.FC<CalculatorProps> = ({ addToast, setApiOffl
   const [isAutomating, setIsAutomating] = useState(false);
   const [showManualSection, setShowManualSection] = useState(false);
   const [apiError, setApiError] = useState("");
+
+  // --- MongoDB Atlas Persistent Dataset ---
+  const [dbDataset, setDbDataset] = useState<ParsedData | null>(null);
+  const [dbMetadata, setDbMetadata] = useState<any>(null);
+
+  useEffect(() => {
+    const checkDBDataset = async () => {
+      try {
+        const res = await fetchLatestMarketDataFromDB();
+        if (res.data) {
+          setDbDataset(res.data);
+          setDbMetadata(res.metadata);
+        }
+      } catch (err) {
+        // Silently fallback to Gemini on demand
+      }
+    };
+    checkDBDataset();
+  }, []);
 
   // --- UI Lifecycle States ---
   const [isCalculating, setIsCalculating] = useState(false);
@@ -213,6 +232,14 @@ ${allCountryCodes}
     } finally {
       setIsAutomating(false);
     }
+  };
+
+  const handleUseMongoDBDataset = () => {
+    if (!dbDataset) return;
+    setParsedData(dbDataset);
+    setIsCalculating(true);
+    setStep(4);
+    addToast("success", "Active Database Feed Loaded", "Loaded verified 195-country market dataset from MongoDB Atlas.");
   };
 
   const handleGeminiParse = () => {
@@ -800,6 +827,27 @@ ${allCountryCodes}
                 To calculate a highly accurate Global Price, our engine analyzes friction factors (taxes, duties, margins, purchasing power) across 195 countries using Gemini AI.
               </p>
 
+              {/* MongoDB Atlas Active Dataset Banner */}
+              {dbDataset && (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <Database className="w-4 h-4 animate-pulse" />
+                      <span className="text-xs font-mono font-semibold uppercase">MongoDB Atlas Active Market Dataset Available</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-300/70">
+                      {dbMetadata?.updatedAt ? new Date(dbMetadata.updatedAt).toLocaleDateString() : 'Daily Feed'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleUseMongoDBDataset}
+                    className="w-full py-3 rounded-xl font-bebas text-base tracking-[0.15em] bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 cursor-pointer flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Check className="w-4 h-4 text-emerald-400" /> USE STORED MONGODB ATLAS MARKET DATA
+                  </button>
+                </div>
+              )}
+
               {/* Primary Automated Action Button */}
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/30 to-amber-500/10 rounded-2xl blur opacity-30 group-hover:opacity-75 transition duration-500" />
@@ -823,7 +871,7 @@ ${allCountryCodes}
               </div>
 
               <p className="text-[11px] text-center text-white/40 font-mono">
-                🔒 Secure backend integration with Google GenAI SDK. API Key remains server-side.
+                🔒 Secure backend integration with Google GenAI SDK & MongoDB Atlas.
               </p>
 
               {/* Error Display */}

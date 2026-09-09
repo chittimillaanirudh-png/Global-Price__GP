@@ -1,11 +1,12 @@
 // src/components/Navigation.tsx
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X, Home, Calculator, HelpCircle, Info, ArrowRight } from "lucide-react";
+import { Menu, X, Home, Calculator, HelpCircle, Info, ArrowRight, Shield } from "lucide-react";
 
 interface NavigationProps {
   currentPage: string;
   onPageChange: (page: string) => void;
+  onOpenAdmin?: () => void;
 }
 
 const NAV_LINKS = [
@@ -17,7 +18,8 @@ const NAV_LINKS = [
 
 export const Navigation: React.FC<NavigationProps> = ({ 
   currentPage, 
-  onPageChange
+  onPageChange,
+  onOpenAdmin
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -64,8 +66,16 @@ export const Navigation: React.FC<NavigationProps> = ({
           })}
         </div>
 
-        {/* Right: CTA Button */}
-        <div className="hidden md:flex items-center gap-4">
+        {/* Right: CTA & Admin Buttons */}
+        <div className="hidden md:flex items-center gap-3">
+          {onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              className="px-4 py-2 rounded-full font-bebas text-xs text-amber-400 tracking-[0.15em] bg-amber-500/10 border border-amber-500/30 hover:border-amber-400 hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" /> ADMIN
+            </button>
+          )}
           <button
             onClick={() => handleLinkClick("calculator")}
             className="liquid-glass rounded-full px-6 py-2.5 font-bebas text-xs text-white tracking-[0.15em] border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all cursor-pointer font-medium"
@@ -152,10 +162,21 @@ export const Navigation: React.FC<NavigationProps> = ({
               </div>
 
               {/* Primary Action Button inside Mobile menu */}
-              <div className="mt-auto pt-6 border-t border-white/5">
+              <div className="mt-auto pt-6 border-t border-white/5 space-y-3">
+                {onOpenAdmin && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenAdmin();
+                    }}
+                    className="w-full text-center py-3.5 font-bebas tracking-[0.2em] text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl hover:bg-amber-500/20 transition-all cursor-pointer font-bold flex items-center justify-center gap-2"
+                  >
+                    <Shield className="w-4 h-4 text-amber-400" /> ADMIN CONTROL PANEL
+                  </button>
+                )}
                 <button
                   onClick={() => handleLinkClick("calculator")}
-                  className="w-full text-center py-4 font-bebas tracking-[0.2em] text-xs text-white bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer font-bold mt-2"
+                  className="w-full text-center py-4 font-bebas tracking-[0.2em] text-xs text-white bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer font-bold"
                 >
                   GO TO VALUATION ENGINE
                 </button>
